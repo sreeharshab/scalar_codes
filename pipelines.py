@@ -755,6 +755,7 @@ class slide_sigma3_gb:
                     atoms = read("CONTCAR")
                     shutil.copyfile("OUTCAR", f"{j+1}/level{level}_step{j+1}.OUTCAR")
                     shutil.copyfile("CONTCAR", f"{j+1}/level{level}_step{j+1}.vasp")
+            os.chdir(cwd)
         elif restart==True:
             cwd = os.getcwd()
             last_step = 0
@@ -803,7 +804,7 @@ class slide_sigma3_gb:
                     shutil.copyfile("OUTCAR", f"{j}/level{level}_step{j}.OUTCAR")
                     shutil.copyfile("CONTCAR", f"{j}/level{level}_step{j}.vasp")
                 tmp_atoms = self.slide(tmp_atoms, n, theta, disp, scheme=scheme)
-                
+            os.chdir(cwd)
 
     # Testing done, working! However, restart option not coded.
     def run_parallel(self, atoms, n, disp, theta, scheme=None):
@@ -833,6 +834,16 @@ class slide_sigma3_gb:
     def get_output_Trajectory(self, atoms, theta, calc=None):
         cwd = os.getcwd()
         os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
+        # Automation code to find max level in the simulation
+        level = 1
+        os.chdir("./1")
+        while level!=0:
+            if os.path.exists(f"level{level}_step1.OUTCAR"):
+                level+=1
+            else:
+                break
+        max_level=level-1
+        os.chdir("../")
         traj = Trajectory(f"Trajectory_{int((theta/pi)*180 + 0.1)}_out.traj","w")
         traj.write(atoms)
         for i in range(self.n_steps):
@@ -840,10 +851,49 @@ class slide_sigma3_gb:
             if calc=='parallel':
                 tmp_atoms = read("OUTCAR", index=-1)
             if calc=='serial':
-                tmp_atoms = read(f'level{3}_step{i+1}.OUTCAR')
+                tmp_atoms = read(f'level{max_level}_step{i+1}.OUTCAR')
             traj.write(tmp_atoms)
             os.chdir("../")
         os.chdir(cwd)
+
+    # Testing done for calc_type="Energy", working!
+    def analysis(self, theta, calc_type=None, property=None):
+        cwd = os.getcwd()
+        os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
+        # Automation code to find max level in the simulation
+        level = 1
+        os.chdir("./1")
+        while level!=0:
+            if os.path.exists(f"level{level}_step1.OUTCAR"):
+                level+=1
+            else:
+                break
+        max_level=level-1
+        os.chdir("../")
+        if property == "Energy":
+            E = np.array([])
+            for i in range(self.n_steps):
+                os.chdir(f"./{i+1}/")
+                if calc_type == "parallel":
+                    atoms = read("OUTCAR")
+                elif calc_type == "serial":
+                    atoms = read(f"level{max_level}_step{i+1}.OUTCAR")
+                E = np.append(E, atoms.get_potential_energy()/len(atoms))
+                os.chdir("./../")
+            os.chdir(cwd)
+            return E
+        elif property == "Stress":
+            S = np.array([])
+            for i in range(self.n_steps):
+                os.chdir(f"./{i+1}/")
+                if calc_type == "parallel":
+                    atoms = read("OUTCAR")
+                elif calc_type == "serial":
+                    atoms = read(f"level{3}_step{i+1}.OUTCAR")  # 3 is a magic number. Automate this!
+                S = np.append(S, atoms.get_stress()[2])
+                os.chdir("./../")
+            os.chdir(cwd)
+            return S
     
     # Testing done, working! **Note: This does not give the coordinates with PBC correction.
     def get_layer_movement(self, atoms, n, disp, theta, traj, nth_layer=None, index=None):    # Layer counting starts from 0. The grain boundary is 10th and 11th layers.
@@ -865,32 +915,6 @@ class slide_sigma3_gb:
         coord = np.array(coord)
         os.chdir(cwd)
         return coord
-
-    # Testing done, working! However, calc_type is not coded for property=Stress.
-    def analysis(self, theta, calc_type=None, property=None):
-        cwd = os.getcwd()
-        os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
-        if property == "Energy":
-            E = np.array([])
-            for i in range(self.n_steps):
-                os.chdir(f"./{i+1}/")
-                if calc_type == "parallel":
-                    atoms = read("OUTCAR")
-                elif calc_type == "serial":
-                    atoms = read(f"level{3}_step{i+1}.OUTCAR")
-                E = np.append(E, atoms.get_potential_energy()/len(atoms))
-                os.chdir("./../")
-            os.chdir(cwd)
-            return E
-        elif property == "Stress":
-            S = np.array([])
-            for i in range(self.n_steps):
-                os.chdir(f"./{i+1}/")
-                atoms = read("OUTCAR")
-                S = np.append(S, atoms.get_stress()[2])
-                os.chdir("./../")
-            os.chdir(cwd)
-            return S
 
 class intercalate_Li:
     def __init__(self):
