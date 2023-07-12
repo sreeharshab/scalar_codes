@@ -21,22 +21,22 @@ if __name__=='__main__':
     # Running simulation
     system.run_serial(atoms, opt_levels, n, disp, theta, scheme="step", restart=True)
 
+    # Saving the output trajectory
+    system.get_output_Trajectory(atoms, theta, calc_type='serial')
+    
     # Obtaining the energies
-    E = system.analysis(theta, calc_type="serial", property="Energy")
+    E = system.analysis(theta, property="Energy")
     step = np.arange(n_steps+1) # +1 is done to consider the initial non-slided GB.
     fig = plt.figure(dpi = 200, figsize=(4.5,4))
     plt.plot(step[1:], E, color = 'indigo')
     plt.scatter(step[1:], E, s = 10, color = 'indigo')
     get_plot_settings(fig, x_label="Step",y_label="Energy (eV/atom)",fig_name=f"./{int((theta/pi)*180 + 0.1)}/Evsstep")
-    
-    # Saving the output trajectory
-    system.get_output_Trajectory(atoms, theta, calc='serial')
 
     # Layer movement
     coord = np.zeros((1,n_steps+1,2))
     indices = np.array([49, 52, 56, 61, 65, 69, 73, 76, 80, 85, 4, 87, 7, 10, 14, 19, 24, 28, 31, 34, 38, 43])
     for index in indices:
-        tmp = system.get_layer_movement(atoms, 11, disp, theta, traj = f"Trajectory_{int((theta/pi)*180 + 0.1)}_out.traj", index = index)
+        tmp = system.get_layer_movement(n, theta, index = index)
         coord = np.append(coord, tmp[np.newaxis,:,:], axis = 0)
     coord = np.delete(coord, 0, 0)
     

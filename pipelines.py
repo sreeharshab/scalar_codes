@@ -19,13 +19,16 @@ from ase.eos import EquationOfState as EOS
 from ase.visualize import view
 from ase.constraints import FixAtoms
 from ase.vibrations import Vibrations
-import pyfiglet
 import pandas as pd
 
-# Generate the ASCII art logo
-logo = pyfiglet.figlet_format("Pipelines")
+logo = r""" ____  _            _ _                 
+|  _ \(_)_ __   ___| (_)_ __   ___  ___ 
+| |_) | | '_ \ / _ \ | | '_ \ / _ \/ __|
+|  __/| | |_) |  __/ | | | | |  __/\__ \
+|_|   |_| .__/ \___|_|_|_| |_|\___||___/
+        |_|                             
+        """
 print(logo)
-print("Version 2\n")
 print("Sree Harsha Bhimineni\nYantao Xia\nUniversity of California, Los Angeles\nbsreeharsha@ucla.edu")
 
 """VASP related codes using ASE"""
@@ -831,7 +834,7 @@ class slide_sigma3_gb:
         os.chdir(cwd)
     
     # Testing done, working!
-    def get_output_Trajectory(self, atoms, theta, calc=None):
+    def get_output_Trajectory(self, atoms, theta, calc_type=None):
         cwd = os.getcwd()
         os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
         # Automation code to find max level in the simulation
@@ -848,57 +851,41 @@ class slide_sigma3_gb:
         traj.write(atoms)
         for i in range(self.n_steps):
             os.chdir(f"./{i+1}")
-            if calc=='parallel':
+            if calc_type=='parallel':
                 tmp_atoms = read("OUTCAR", index=-1)
-            if calc=='serial':
+            if calc_type=='serial':
                 tmp_atoms = read(f'level{max_level}_step{i+1}.OUTCAR')
             traj.write(tmp_atoms)
             os.chdir("../")
         os.chdir(cwd)
 
-    # Testing done for calc_type="Energy", working!
-    def analysis(self, theta, calc_type=None, property=None):
+    # Testing done for calc_type="Energy", working! 0th step energy not included (should work on it)!
+    def analysis(self, theta, property=None):
         cwd = os.getcwd()
         os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
-        # Automation code to find max level in the simulation
-        level = 1
-        os.chdir("./1")
-        while level!=0:
-            if os.path.exists(f"level{level}_step1.OUTCAR"):
-                level+=1
-            else:
-                break
-        max_level=level-1
-        os.chdir("../")
+        traj = f"Trajectory_{int((theta/pi)*180 + 0.1)}_out.traj"
         if property == "Energy":
             E = np.array([])
             for i in range(self.n_steps):
-                os.chdir(f"./{i+1}/")
-                if calc_type == "parallel":
-                    atoms = read("OUTCAR")
-                elif calc_type == "serial":
-                    atoms = read(f"level{max_level}_step{i+1}.OUTCAR")
-                E = np.append(E, atoms.get_potential_energy()/len(atoms))
-                os.chdir("./../")
+                traj_atoms = read(traj+f"@{i+1}")
+                E = np.append(E, traj_atoms.get_potential_energy()/len(traj_atoms))
             os.chdir(cwd)
             return E
         elif property == "Stress":
             S = np.array([])
             for i in range(self.n_steps):
-                os.chdir(f"./{i+1}/")
-                if calc_type == "parallel":
-                    atoms = read("OUTCAR")
-                elif calc_type == "serial":
-                    atoms = read(f"level{3}_step{i+1}.OUTCAR")  # 3 is a magic number. Automate this!
-                S = np.append(S, atoms.get_stress()[2])
-                os.chdir("./../")
+                traj_atoms = read(traj+f"@{i+1}")
+                S = np.append(S, traj_atoms.get_stress()[2])
             os.chdir(cwd)
             return S
     
-    # Testing done, working! **Note: This does not give the coordinates with PBC correction.
-    def get_layer_movement(self, atoms, n, disp, theta, traj, nth_layer=None, index=None):    # Layer counting starts from 0. The grain boundary is 10th and 11th layers.
+    # Testing done, working!
+    # Layer counting starts from 0. The grain boundary is 10th and 11th layers.
+    def get_layer_movement(self, n, theta, nth_layer=None, index=None):
         cwd = os.getcwd()
         os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
+        traj = f"Trajectory_{int((theta/pi)*180 + 0.1)}_out.traj"
+        atoms = read(traj+"@0")
         cell = atoms.get_cell()
         layer_size = (cell[0][0])/(2*n)
         coord = []
