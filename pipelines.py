@@ -83,10 +83,12 @@ def set_vasp_key(calc, key, value):
         calc.input_params[key] = value
 
 """Yantao's code"""
-def cell_opt(atoms, npoints=5, eps=0.04):
+def cell_opt(atoms, npoints=5, eps=0.04, kpts=None):
     calc = get_base_calc()
 
-    calc.set(ibrion=-1, nsw=0, kpts=atoms.info["kpts"])
+    if kpts==None:
+        kpts=atoms.info["kpts"]
+    calc.set(ibrion=-1, nsw=0, kpts=kpts, amin=0.01)    # The code is not yet suitable to add or override the base_calc properties.
     atoms.calc = calc
 
     eos = calculate_eos(atoms, npoints=npoints, eps=eps, trajectory="eos.traj")
@@ -99,9 +101,10 @@ def cell_opt(atoms, npoints=5, eps=0.04):
     return atoms
 
 
-def axis_opt(atoms, axis, npoints=5, eps=0.04):
+def axis_opt(atoms, axis, npoints=5, eps=0.04, kpts=None):
     """relax one vector of the cell"""
-    kpts = atoms.info["kpts"]
+    if kpts==None:
+        kpts = atoms.info["kpts"]
     ens = np.zeros(npoints)
     vols = np.zeros(npoints)
 
