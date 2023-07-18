@@ -83,12 +83,15 @@ def set_vasp_key(calc, key, value):
         calc.input_params[key] = value
 
 """Yantao's code"""
-def cell_opt(atoms, npoints=5, eps=0.04, kpts=None):
+def cell_opt(atoms, npoints=5, eps=0.04, settings=None):
     calc = get_base_calc()
 
-    if kpts==None:
-        kpts=atoms.info["kpts"]
-    calc.set(ibrion=-1, nsw=0, kpts=kpts, amin=0.01)    # The code is not yet suitable to add or override the base_calc properties.
+    if settings["kpts"]==None:
+        settings["kpts"]=atoms.info["kpts"]
+    calc.set(ibrion=-1, nsw=0)
+    keys = settings.keys()
+    for key in keys:
+        set_vasp_key(calc, key, settings[key])
     atoms.calc = calc
 
     eos = calculate_eos(atoms, npoints=npoints, eps=eps, trajectory="eos.traj")
@@ -101,10 +104,10 @@ def cell_opt(atoms, npoints=5, eps=0.04, kpts=None):
     return atoms
 
 
-def axis_opt(atoms, axis, npoints=5, eps=0.04, kpts=None):
+def axis_opt(atoms, axis, npoints=5, eps=0.04, settings=None):
     """relax one vector of the cell"""
-    if kpts==None:
-        kpts = atoms.info["kpts"]
+    if settings["kpts"]==None:
+        settings["kpts"] = atoms.info["kpts"]
     ens = np.zeros(npoints)
     vols = np.zeros(npoints)
 
@@ -115,7 +118,10 @@ def axis_opt(atoms, axis, npoints=5, eps=0.04, kpts=None):
         atoms_tmp = atoms.copy()
         atoms_tmp.cell[axis] = atoms.cell[axis] * factor
         calc = get_base_calc()
-        calc.set(ibrion=-1, nsw=0, kpts=kpts, directory=f"{factor:.2f}")
+        calc.set(ibrion=-1, nsw=0, directory=f"{factor:.2f}")
+        keys = settings.keys()
+        for key in keys:
+            set_vasp_key(calc, key, settings[key])
         atoms_tmp.calc = calc
         ens[ifactor] = atoms_tmp.get_potential_energy()
         vols[ifactor] = atoms_tmp.get_volume()
@@ -723,6 +729,22 @@ class slide_sigma3_gb:
             atoms = self.structure_corrections(atoms, disp)
             return atoms
     
+    def run_settings(self, atoms, step, calc, opt_levels, level):
+        level_settings = opt_levels[level]
+        for key in level_settings.keys():
+            set_vasp_key(calc, key, level_settings[key])
+        atoms.calc = calc
+        atoms.get_potential_energy()
+        calc = get_base_calc()
+        set_vasp_key(calc, 'encut', 300)
+        set_vasp_key(calc, 'ibrion', 2)
+        set_vasp_key(calc, 'ediffg', -0.01)
+        set_vasp_key(calc, 'nsw', 200)
+        set_vasp_key(calc, 'potim', 0.5)
+        tmp_atoms = read("CONTCAR")
+        shutil.copyfile("OUTCAR", f"{step}/level{level}_step{step}.OUTCAR")
+        shutil.copyfile("CONTCAR", f"{step}/level{level}_step{step}.vasp")
+    
     # Testing done, working!
     def run_serial(self, atoms, opt_levels, n, disp, theta, scheme=None, restart=None):
         calc = get_base_calc()
@@ -747,20 +769,7 @@ class slide_sigma3_gb:
                 # Editing the calc object and starting the VASP simulation.
                 levels = opt_levels.keys()
                 for level in levels:
-                    level_settings = opt_levels[level]
-                    for key in level_settings.keys():
-                        set_vasp_key(calc, key, level_settings[key])
-                    atoms.calc = calc
-                    atoms.get_potential_energy()
-                    calc = get_base_calc()
-                    set_vasp_key(calc, 'encut', 300)
-                    set_vasp_key(calc, 'ibrion', 2)
-                    set_vasp_key(calc, 'ediffg', -0.01)
-                    set_vasp_key(calc, 'nsw', 200)
-                    set_vasp_key(calc, 'potim', 0.5)
-                    atoms = read("CONTCAR")
-                    shutil.copyfile("OUTCAR", f"{j+1}/level{level}_step{j+1}.OUTCAR")
-                    shutil.copyfile("CONTCAR", f"{j+1}/level{level}_step{j+1}.vasp")
+                    self.run_settings(self, atoms, j, calc, opt_levels, level)
             os.chdir(cwd)
         elif restart==True:
             cwd = os.getcwd()
@@ -781,6 +790,11 @@ class slide_sigma3_gb:
             largest_level=0
             for level in levels:
                 largest_level = level
+            if last_level!=largest_level:
+                for level in levels:
+                    if level > last_level:
+                        self.run_settings(tmp_atoms, last_step, calc, opt_levels, level)
+                last_level=largest_level
             if last_level==largest_level:
                 tmp_atoms = self.slide(tmp_atoms, n, theta, disp, scheme=scheme)
                 last_step = last_step+1
@@ -795,20 +809,7 @@ class slide_sigma3_gb:
                     pass
                 levels = opt_levels.keys()
                 for level in levels:
-                    level_settings = opt_levels[level]
-                    for key in level_settings.keys():
-                        set_vasp_key(calc, key, level_settings[key])
-                    tmp_atoms.calc = calc
-                    tmp_atoms.get_potential_energy()
-                    calc = get_base_calc()
-                    set_vasp_key(calc, 'encut', 300)
-                    set_vasp_key(calc, 'ibrion', 2)
-                    set_vasp_key(calc, 'ediffg', -0.01)
-                    set_vasp_key(calc, 'nsw', 200)
-                    set_vasp_key(calc, 'potim', 0.5)
-                    tmp_atoms = read("CONTCAR")
-                    shutil.copyfile("OUTCAR", f"{j}/level{level}_step{j}.OUTCAR")
-                    shutil.copyfile("CONTCAR", f"{j}/level{level}_step{j}.vasp")
+                    self.run_settings(tmp_atoms, j, calc, opt_levels, level)
                 tmp_atoms = self.slide(tmp_atoms, n, theta, disp, scheme=scheme)
             os.chdir(cwd)
 
