@@ -436,7 +436,7 @@ class COHP:
             plt.close()
 
 
-class NEB_VASP:
+class NEB:
     def __init__(self, initial, final):
         self.initial = initial
         self.final = final
@@ -1032,42 +1032,6 @@ def cure_Si_surface_with_H(atoms):
             H_atom = Atom("H", coord)
             atoms.append(H_atom)
     return atoms
-
-class NEB_ASE:
-    def run_neb_ase(self, n_images, kpts, initial=None, final=None, restart=None):
-        # Provide initial and final only if restart=None/False.
-        # n_images is the number of images in between the initial and final image.
-        if restart==True:
-            images = read(f"I2F1.traj@-{n_images+2}:")  # Use this if the NEB is being restarted. .traj@-x: is used where x is the number of images in the band.
-            neb = NEB(images)
-        else:
-            images = [initial]
-            images += [initial.copy() for i in range(n_images)]
-            images += [final]
-            neb = NEB(images)
-            # Interpolating linearly the positions of the six middle images:
-            neb.interpolate()
-        for image in images[1:n_images+1]:
-            calc = get_base_calc()
-            set_vasp_key(calc, 'ibrion', -1)
-            set_vasp_key(calc, 'nsw', 0)
-            set_vasp_key(calc, 'kpts', kpts)
-            image.calc = calc
-        optimizer = BFGS(neb, Trajectory="I2F.traj")
-        optimizer.run(fmax=0.01)
-        return images
-
-    def get_neb_plot(self, n_images, images, initial_outcar_path, final_outcar_path):
-        # This is to get the energies of the intial and final images from the geo-opt folder as their energies are not included in NEB.
-        for i in range(0,len(images),(n_images+2)):
-            en_i = read(initial_outcar_path).get_potential_energy()
-            images[i].calc = SPC(atoms=images[0], energy=en_i, forces=np.zeros((len(images[0]),3)))
-            en_f = read(final_outcar_path).get_potential_energy()
-            images[i+n_images+1].calc = SPC(atoms=images[0], energy=en_i, forces=np.zeros((len(images[0]),3)))
-        for i in range(0,len(images),(n_images+2)):
-            nebtools = NEBTools(images[i:i+n_images+2])
-            fig = nebtools.plot_band()
-        return fig
 
 def dos(atoms, dense_k_points):
     calc = get_base_calc()
