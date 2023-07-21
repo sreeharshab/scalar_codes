@@ -162,8 +162,8 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
             atoms_tmp = read("CONTCAR")
             atoms_tmp.calc = calc
             atoms_tmp.get_potential_energy()
-            calc.reset()
-            atoms_tmp = read("OUTCAR", index=-1)
+            calc = get_base_calc()
+            atoms_tmp = read("CONTCAR")
             shutil.copyfile("CONTCAR", f"opt{level}.vasp")
             shutil.copyfile("vasprun.xml", f"opt{level}.xml")
             shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
@@ -729,22 +729,6 @@ class slide_sigma3_gb:
             atoms = self.structure_corrections(atoms, disp)
             return atoms
     
-    def run_settings(self, atoms, step, calc, opt_levels, level):
-        level_settings = opt_levels[level]
-        for key in level_settings.keys():
-            set_vasp_key(calc, key, level_settings[key])
-        atoms.calc = calc
-        atoms.get_potential_energy()
-        calc = get_base_calc()
-        set_vasp_key(calc, 'encut', 300)
-        set_vasp_key(calc, 'ibrion', 2)
-        set_vasp_key(calc, 'ediffg', -0.01)
-        set_vasp_key(calc, 'nsw', 200)
-        set_vasp_key(calc, 'potim', 0.5)
-        tmp_atoms = read("CONTCAR")
-        shutil.copyfile("OUTCAR", f"{step}/level{level}_step{step}.OUTCAR")
-        shutil.copyfile("CONTCAR", f"{step}/level{level}_step{step}.vasp")
-    
     # Testing done, working!
     def run_serial(self, atoms, opt_levels, n, disp, theta, scheme=None, restart=None):
         calc = get_base_calc()
@@ -769,13 +753,26 @@ class slide_sigma3_gb:
                 # Editing the calc object and starting the VASP simulation.
                 levels = opt_levels.keys()
                 for level in levels:
-                    self.run_settings(self, atoms, j, calc, opt_levels, level)
+                    level_settings = opt_levels[level]
+                    for key in level_settings.keys():
+                        set_vasp_key(calc, key, level_settings[key])
+                    atoms.calc = calc
+                    atoms.get_potential_energy()
+                    calc = get_base_calc()
+                    set_vasp_key(calc, 'encut', 300)
+                    set_vasp_key(calc, 'ibrion', 2)
+                    set_vasp_key(calc, 'ediffg', -0.01)
+                    set_vasp_key(calc, 'nsw', 200)
+                    set_vasp_key(calc, 'potim', 0.5)
+                    atoms = read("CONTCAR")
+                    shutil.copyfile("OUTCAR", f"{j+1}/level{level}_step{j+1}.OUTCAR")
+                    shutil.copyfile("CONTCAR", f"{j+1}/level{level}_step{j+1}.vasp")
             os.chdir(cwd)
         elif restart==True:
             cwd = os.getcwd()
             last_step = 0
             for step in range(self.n_steps):
-                if os.path.exists(cwd + f"/{step+1}"):
+                if os.path.exists(cwd + f"/{step+1}") and os.listdir(cwd + f"/{step+1}")!=[]:
                     last_step = step+1
                 else:
                     break
@@ -786,22 +783,30 @@ class slide_sigma3_gb:
                 else:
                     break
             tmp_atoms = read(cwd + f"/{last_step}/level{last_level}_step{last_step}.vasp")
-            # This is to prevent calculating all the levels for the last step if they are already computed.
             largest_level=0
             for level in levels:
                 largest_level = level
             if last_level!=largest_level:
                 for level in levels:
                     if level > last_level:
-                        self.run_settings(tmp_atoms, last_step, calc, opt_levels, level)
+                        level_settings = opt_levels[level]
+                        for key in level_settings.keys():
+                            set_vasp_key(calc, key, level_settings[key])
+                        tmp_atoms.calc = calc
+                        tmp_atoms.get_potential_energy()
+                        calc = get_base_calc()
+                        set_vasp_key(calc, 'encut', 300)
+                        set_vasp_key(calc, 'ibrion', 2)
+                        set_vasp_key(calc, 'ediffg', -0.01)
+                        set_vasp_key(calc, 'nsw', 200)
+                        set_vasp_key(calc, 'potim', 0.5)
+                        tmp_atoms = read("CONTCAR")
+                        shutil.copyfile("OUTCAR", f"{last_step}/level{level}_step{last_step}.OUTCAR")
+                        shutil.copyfile("CONTCAR", f"{last_step}/level{level}_step{last_step}.vasp")
                 last_level=largest_level
             if last_level==largest_level:
                 tmp_atoms = self.slide(tmp_atoms, n, theta, disp, scheme=scheme)
                 last_step = last_step+1
-                try:
-                    os.mkdir(f'{last_step}')
-                except FileExistsError:
-                    pass
             for j in range(last_step,self.n_steps+1,1):
                 try:
                     os.mkdir(f'{j}')
@@ -809,7 +814,20 @@ class slide_sigma3_gb:
                     pass
                 levels = opt_levels.keys()
                 for level in levels:
-                    self.run_settings(tmp_atoms, j, calc, opt_levels, level)
+                    level_settings = opt_levels[level]
+                    for key in level_settings.keys():
+                        set_vasp_key(calc, key, level_settings[key])
+                    tmp_atoms.calc = calc
+                    tmp_atoms.get_potential_energy()
+                    calc = get_base_calc()
+                    set_vasp_key(calc, 'encut', 300)
+                    set_vasp_key(calc, 'ibrion', 2)
+                    set_vasp_key(calc, 'ediffg', -0.01)
+                    set_vasp_key(calc, 'nsw', 200)
+                    set_vasp_key(calc, 'potim', 0.5)
+                    tmp_atoms = read("CONTCAR")
+                    shutil.copyfile("OUTCAR", f"{j}/level{level}_step{j}.OUTCAR")
+                    shutil.copyfile("CONTCAR", f"{j}/level{level}_step{j}.vasp")
                 tmp_atoms = self.slide(tmp_atoms, n, theta, disp, scheme=scheme)
             os.chdir(cwd)
 
@@ -1093,7 +1111,7 @@ def get_plot_settings(fig, x_label=None, y_label=None, fig_name=None, show=None)
         plt.xlabel(x_label)
     if y_label!=None:
         plt.ylabel(y_label)
-    plt.legend(frameon = False, loc = "upper left", fontsize = "7", bbox_to_anchor = (0.2, 1))
+    plt.legend(frameon = False, loc = "upper left", fontsize = "7")
     if fig_name!=None:
         plt.savefig(fig_name, bbox_inches='tight')
     if show == True:
