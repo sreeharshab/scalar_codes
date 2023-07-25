@@ -163,7 +163,7 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
             atoms_tmp.calc = calc
             atoms_tmp.get_potential_energy()
             calc = get_base_calc()
-            atoms_tmp = read("CONTCAR")
+            atoms_tmp = read("OUTCAR", index=-1)
             shutil.copyfile("CONTCAR", f"opt{level}.vasp")
             shutil.copyfile("vasprun.xml", f"opt{level}.xml")
             shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
@@ -628,6 +628,123 @@ def pbc_correction(atoms):
             atom.z = atom.z - cell[2][2]
     return atoms
 
+class cell_geo_opt:
+    def __init__():
+        pass
+
+    def scale_kpts(self, tmp_atoms, opt_levels):
+        tmp_cell = tmp_atoms.get_cell()
+
+        # Scaling kpoints according to the cell size
+        kpts = [1,1,1]
+        for j in range(kpts.size):
+            kpts[j] = int((init_kpts[j]*cell[j][j])/tmp_cell[j][j])
+            if kpts[j]%2==0:
+                kpts[j]+=1
+            if kpts[j]==0:
+                kpts[j]=1
+
+        # Scaling kpoints according to level
+        levels = opt_levels.keys()
+        count=levels[-1]
+        for level in levels:
+            level_settings = opt_levels[level]
+            level_kpts = [kpts[0]/count kpts[1]/count kpts[2]/count]
+            level_kpts = [1 if x == 0 else x for x in level_kpts]
+            level_settings["kpts"] = level_kpts
+            count-=1
+        
+        return opt_levels
+
+    def perform_file_operations(self, step, opt_levels):
+        levels = opt_levels.keys()
+        for level in levels:
+            shutil.copyfile(f"opt{level}.OUTCAR", f"{step}/opt{level}.OUTCAR")
+            os.remove(f"opt{level}.OUTCAR")
+            os.remove(f"opt{level}.vasp")
+            os.remove(f"opt{level}.xml")
+        shutil.copyfile("CONTCAR", f"{step}/CONTCAR")
+
+    """ Beneficial if there is huge change in volume of the system observed 
+        in equation of state analysis using either cell_opt or axis_opt.
+        Only kpoints are scaled in opt_levels. Other settings are untouched"""
+    def run(self, init_atoms, opt_cell_atoms, n, opt_levels, init_kpts, restart=None):
+        cell = init_atoms.get_cell()
+        opt_cell = opt_cell_atoms.get_cell()
+
+        x = np.linspace(cell[0][0], opt_cell[0][0], num=n+1)
+        y = np.linspace(cell[1][1], opt_cell[1][1], num=n+1)
+        z = np.linspace(cell[2][2], opt_cell[2][2], num=n+1)
+        x = x[1:]
+        y = y[1:]
+        z = z[1:]
+        tmp_atoms = atoms.copy()
+
+        if restart==None or restart==False:
+            for i in range(x.size):
+                try:
+                    os.mkdir(f"{i+1}")
+                except FileExistsError:
+                    pass
+                tmp_atoms.set_cell([x[i], y[i], z[i]])
+                tmp_atoms.center()
+                
+                opt_levels = self.scale_kpts(tmp_atoms, opt_levels)
+                
+                geo_opt(tmp_atoms, mode="vasp", opt_levels=opt_levels)
+
+                self.perform_file_operations(i+1, opt_levels)
+
+                tmp_atoms = read("CONTCAR")
+                return tmp_atoms
+            
+        if restart==True:
+            cwd = os.getcwd()
+            last_step = 0
+            for step in range(n):
+                if os.path.exists(cwd + f"/{step+1}") and os.listdir(cwd + f"/{step+1}")!=[]:
+                    last_step = step+1
+                else:
+                    break
+            
+            levels = opt_levels.keys()
+            for level in levels:
+                if os.path.exists(cwd + f"/{last_step}/opt{level}.OUTCAR"):
+                    last_level = level
+                else:
+                    break
+            largest_level = max(levels)
+
+            tmp_atoms = read(cwd+f"/{last_step}/opt{level}.OUTCAR", index=-1)
+
+            if last_level!=largest_level:
+                opt_levels = self.scale_kpts(tmp_atoms, opt_levels)
+                opt_levels = list(opt_levels.items())
+                opt_levels = dict(opt_levels[last_level+1:])
+            
+                geo_opt(tmp_atoms, mode="vasp", opt_levels=opt_levels)
+
+                self.perform_file_operations(last_step, opt_levels)
+
+                tmp_atoms = read("CONTCAR")
+
+            for i in range(last_step, x.size,1):
+                try:
+                    os.mkdir(f"{i+1}")
+                except FileExistsError:
+                    pass
+                tmp_atoms.set_cell([x[i], y[i], z[i]])
+                tmp_atoms.center()
+                
+                opt_levels = self.scale_kpts(tmp_atoms, opt_levels)
+                
+                geo_opt(tmp_atoms, mode="vasp", opt_levels=opt_levels)
+
+                self.perform_file_operations(i+1, opt_levels)
+
+                tmp_atoms = read("CONTCAR")
+                return tmp_atoms
+
 # Testing done, working!
 def create_sigma3_gb(n, top_layers, bottom_layers):
     top_layers = top_layers*(n,1,1) # Repeating the layers.
@@ -783,9 +900,7 @@ class slide_sigma3_gb:
                 else:
                     break
             tmp_atoms = read(cwd + f"/{last_step}/level{last_level}_step{last_step}.vasp")
-            largest_level=0
-            for level in levels:
-                largest_level = level
+            largest_level=max(levels)
             if last_level!=largest_level:
                 for level in levels:
                     if level > last_level:
