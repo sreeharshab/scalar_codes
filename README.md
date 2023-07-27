@@ -1,9 +1,10 @@
 # Installation
+Clone this repo using the following commands:
 ```
 cd /path_to_home_directory/
 git clone https://github.com/sreeharshab/scalar_codes.git
 ```
-After cloning the repo, open your `.bashrc` and insert this line:
+After successful cloning of the repo, open your `.bashrc` and insert this line:
 ```
 export PYTHONPATH=/path_to_home_directory/scalar_codes
 ```
@@ -11,6 +12,7 @@ Exit your `.bashrc` and source it as follows:
 ```
 source .bashrc
 ```
+Note: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
 
 # Resources
 There are three parts to this repository.
@@ -39,3 +41,6 @@ All of the code is available in pipelines.py. The following are the available fe
 
 ## Part 3: Grand Canonical Basin Hopping
 Dr. Geng Sun, a former postdoc in Prof. Philippe Sautet's lab, developed gcbh.py. This performs a global optimization on the system in consideration based on the input modifiers.
+
+<!-- # Contributing
+Contributions to improve this repo are always welcome. Any contribution should be  -->
