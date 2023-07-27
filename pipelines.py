@@ -629,15 +629,16 @@ def pbc_correction(atoms):
     return atoms
 
 class cell_geo_opt:
-    def __init__():
+    def __init__(self):
         pass
 
-    def scale_kpts(self, tmp_atoms, opt_levels):
+    def scale_kpts(self, init_atoms, tmp_atoms, opt_levels, init_kpts):
+        cell = init_atoms.get_cell()
         tmp_cell = tmp_atoms.get_cell()
 
         # Scaling kpoints according to the cell size
         kpts = [1,1,1]
-        for j in range(kpts.size):
+        for j in range(len(kpts)):
             kpts[j] = int((init_kpts[j]*cell[j][j])/tmp_cell[j][j])
             if kpts[j]%2==0:
                 kpts[j]+=1
@@ -646,10 +647,10 @@ class cell_geo_opt:
 
         # Scaling kpoints according to level
         levels = opt_levels.keys()
-        count=levels[-1]
+        count=list(levels)[-1]
         for level in levels:
             level_settings = opt_levels[level]
-            level_kpts = [kpts[0]/count kpts[1]/count kpts[2]/count]
+            level_kpts = [int(kpts[0]/count), int(kpts[1]/count), int(kpts[2]/count)]
             level_kpts = [1 if x == 0 else x for x in level_kpts]
             level_settings["kpts"] = level_kpts
             count-=1
@@ -678,7 +679,7 @@ class cell_geo_opt:
         x = x[1:]
         y = y[1:]
         z = z[1:]
-        tmp_atoms = atoms.copy()
+        tmp_atoms = init_atoms.copy()
 
         if restart==None or restart==False:
             for i in range(x.size):
@@ -689,14 +690,14 @@ class cell_geo_opt:
                 tmp_atoms.set_cell([x[i], y[i], z[i]])
                 tmp_atoms.center()
                 
-                opt_levels = self.scale_kpts(tmp_atoms, opt_levels)
-                
+                opt_levels = self.scale_kpts(init_atoms, tmp_atoms, opt_levels, init_kpts)
+
                 geo_opt(tmp_atoms, mode="vasp", opt_levels=opt_levels)
 
                 self.perform_file_operations(i+1, opt_levels)
 
                 tmp_atoms = read("CONTCAR")
-                return tmp_atoms
+            return tmp_atoms
             
         if restart==True:
             cwd = os.getcwd()
@@ -708,25 +709,34 @@ class cell_geo_opt:
                     break
             
             levels = opt_levels.keys()
+            largest_level = max(levels)
+            last_level = 0
             for level in levels:
-                if os.path.exists(cwd + f"/{last_step}/opt{level}.OUTCAR"):
+                if os.path.exists(cwd + f"/opt{level}.OUTCAR"):
                     last_level = level
                 else:
                     break
-            largest_level = max(levels)
 
-            tmp_atoms = read(cwd+f"/{last_step}/opt{level}.OUTCAR", index=-1)
-
-            if last_level!=largest_level:
-                opt_levels = self.scale_kpts(tmp_atoms, opt_levels)
-                opt_levels = list(opt_levels.items())
-                opt_levels = dict(opt_levels[last_level+1:])
+            if last_level==0:
+                tmp_atoms = read(cwd+f"/{last_step}/opt{level}.OUTCAR", index=-1)
+            elif last_level!=0 and last_level!=largest_level:
+                try:
+                    os.mkdir(f"{last_step+1}")
+                except FileExistsError:
+                    pass
+                tmp_atoms = read(cwd+f"/opt{last_level}.OUTCAR", index=-1)
+                opt_levels = self.scale_kpts(init_atoms, tmp_atoms, opt_levels, init_kpts)
+                tmp_opt_levels = opt_levels.copy()
+                tmp_opt_levels = list(opt_levels.items())
+                tmp_opt_levels = dict(tmp_opt_levels[last_level:])
             
-                geo_opt(tmp_atoms, mode="vasp", opt_levels=opt_levels)
+                geo_opt(tmp_atoms, mode="vasp", opt_levels=tmp_opt_levels)
 
-                self.perform_file_operations(last_step, opt_levels)
+                self.perform_file_operations(last_step+1, opt_levels)
 
                 tmp_atoms = read("CONTCAR")
+
+                last_step+=1
 
             for i in range(last_step, x.size,1):
                 try:
@@ -736,14 +746,14 @@ class cell_geo_opt:
                 tmp_atoms.set_cell([x[i], y[i], z[i]])
                 tmp_atoms.center()
                 
-                opt_levels = self.scale_kpts(tmp_atoms, opt_levels)
+                opt_levels = self.scale_kpts(init_atoms, tmp_atoms, opt_levels, init_kpts)
                 
                 geo_opt(tmp_atoms, mode="vasp", opt_levels=opt_levels)
 
                 self.perform_file_operations(i+1, opt_levels)
 
                 tmp_atoms = read("CONTCAR")
-                return tmp_atoms
+            return tmp_atoms
 
 # Testing done, working!
 def create_sigma3_gb(n, top_layers, bottom_layers):
