@@ -10,6 +10,7 @@ export PYTHONPATH=/path_to_home_directory/scalar_codes
 Exit your `.bashrc` and source it as follows:
 ```
 source .bashrc
+```
 
 # Resources
 There are three parts to this repository.
