@@ -628,6 +628,7 @@ def pbc_correction(atoms):
             atom.z = atom.z - cell[2][2]
     return atoms
 
+# Testing done, working!
 class cell_geo_opt:
     def __init__(self):
         pass
@@ -754,6 +755,53 @@ class cell_geo_opt:
 
                 tmp_atoms = read("CONTCAR")
             return tmp_atoms
+
+def dos(atoms, dense_k_points):
+    calc = get_base_calc()
+    set_vasp_key(calc, 'ismear', -5)
+    set_vasp_key(calc, 'icharg', 11)
+    set_vasp_key(calc, 'lorbit', 11)
+    set_vasp_key(calc, 'nedos', 1000)   # It should be between 1000 to 3000 based on the accuracy required.
+    set_vasp_key(calc, 'kpts', dense_k_points)
+    atoms.set_calculator(calc)
+    atoms.get_potential_energy()
+    return atoms
+
+# Testing done, working!
+def get_neighbor_list(atoms):
+    nat_cut = natural_cutoffs(atoms, mult=1)
+    nl = NeighborList(nat_cut, self_interaction=False, bothways=True)
+    nl.update(atoms)
+    f = open("Neighbor_List.txt", "w")
+    # Printing neighbor list for all atoms
+    for r in range(len(atoms)):
+        indices, offsets = nl.get_neighbors(r)
+        f.write(f"The neighbors for {r} atom are: " + str(indices) + "\n")
+        pos = []
+        f.write("Position                                Distance\n")
+        for i, offset in zip(indices, offsets):
+            pos = atoms.positions[i] + offset @ atoms.get_cell()    # Code to account for periodic boundary condition. Offset list consists something like [0,1,0] and offset@atoms.get_cell() gives [0,7.73277,0] where 7.73277 is the b vector length.
+            dist = ((atoms[r].x - pos[0])**2 + (atoms[r].y - pos[1])**2 + (atoms[r].z - pos[2])**2)**(1/2)
+            f.write(str(pos) + " " + str(dist) + "\n")
+    # Printing coordination number for all atoms
+    f.write("\nCoordination numbers for all the atoms: \n")
+    for i in range(len(atoms)):
+        indices, offsets = nl.get_neighbors(i)
+        f.write(str(i) + " " + str(len(indices)) + "\n")
+
+# Testing done, working!
+def check_run_completion(location):
+    cwd = os.getcwd()
+    os.chdir(location)
+    with open("OUTCAR", "r"):
+        content = f.readlines()
+        c = 0
+        for line in content:
+            if line == " General timing and accounting informations for this job:\n":
+                c = c + 1
+        if c == 0:
+            print("Simulation not completed in " + location)
+    os.chdir(cwd)
 
 # Testing done, working!
 def create_sigma3_gb(n, top_layers, bottom_layers):
@@ -1175,53 +1223,6 @@ def cure_Si_surface_with_H(atoms):
             H_atom = Atom("H", coord)
             atoms.append(H_atom)
     return atoms
-
-def dos(atoms, dense_k_points):
-    calc = get_base_calc()
-    set_vasp_key(calc, 'ismear', -5)
-    set_vasp_key(calc, 'icharg', 11)
-    set_vasp_key(calc, 'lorbit', 11)
-    set_vasp_key(calc, 'nedos', 1000)   # It should be between 1000 to 3000 based on the accuracy required.
-    set_vasp_key(calc, 'kpts', dense_k_points)
-    atoms.set_calculator(calc)
-    atoms.get_potential_energy()
-    return atoms
-
-# Testing done, working!
-def get_neighbor_list(atoms):
-    nat_cut = natural_cutoffs(atoms, mult=1)
-    nl = NeighborList(nat_cut, self_interaction=False, bothways=True)
-    nl.update(atoms)
-    f = open("Neighbor_List.txt", "w")
-    # Printing neighbor list for all atoms
-    for r in range(len(atoms)):
-        indices, offsets = nl.get_neighbors(r)
-        f.write(f"The neighbors for {r} atom are: " + str(indices) + "\n")
-        pos = []
-        f.write("Position                                Distance\n")
-        for i, offset in zip(indices, offsets):
-            pos = atoms.positions[i] + offset @ atoms.get_cell()    # Code to account for periodic boundary condition. Offset list consists something like [0,1,0] and offset@atoms.get_cell() gives [0,7.73277,0] where 7.73277 is the b vector length.
-            dist = ((atoms[r].x - pos[0])**2 + (atoms[r].y - pos[1])**2 + (atoms[r].z - pos[2])**2)**(1/2)
-            f.write(str(pos) + " " + str(dist) + "\n")
-    # Printing coordination number for all atoms
-    f.write("\nCoordination numbers for all the atoms: \n")
-    for i in range(len(atoms)):
-        indices, offsets = nl.get_neighbors(i)
-        f.write(str(i) + " " + str(len(indices)) + "\n")
-
-# Testing done, working!
-def check_run_completion(location):
-    cwd = os.getcwd()
-    os.chdir(location)
-    with open("OUTCAR", "r"):
-        content = f.readlines()
-        c = 0
-        for line in content:
-            if line == " General timing and accounting informations for this job:\n":
-                c = c + 1
-        if c == 0:
-            print("Simulation not completed in " + location)
-    os.chdir(cwd)
 
 # Testing done, working!
 def get_plot_settings(fig, x_label=None, y_label=None, fig_name=None, show=None):
