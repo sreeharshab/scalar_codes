@@ -793,7 +793,7 @@ def get_neighbor_list(atoms):
 def check_run_completion(location):
     cwd = os.getcwd()
     os.chdir(location)
-    with open("OUTCAR", "r"):
+    with open("OUTCAR", "r") as f:
         content = f.readlines()
         c = 0
         for line in content:
