@@ -669,7 +669,8 @@ class cell_geo_opt:
 
     """ Beneficial if there is huge change in volume of the system observed 
         in equation of state analysis using either cell_opt or axis_opt.
-        Only kpoints are scaled in opt_levels. Other settings are untouched"""
+        Only kpoints are scaled in opt_levels. Other settings are untouched. 
+        This is an alternative for ISIF=3"""
     def run(self, init_atoms, opt_cell_atoms, n, opt_levels, init_kpts, restart=None):
         cell = init_atoms.get_cell()
         opt_cell = opt_cell_atoms.get_cell()
@@ -852,7 +853,8 @@ class slide_sigma3_gb:
                 d = np.array([])
                 indices, offsets = nl.get_neighbors(c)
                 for i, offset in zip(indices, offsets):
-                    pos = atoms.positions[i] + offset @ cell    # Code to account for periodic boundary condition. Offset list consists something like [0,1,0] and offset@atoms.get_cell() gives [0,7.73277,0] where 7.73277 is the b vector length.
+                    pos = atoms.positions[i] + offset @ cell    # Code to account for periodic boundary condition. Offset list consists something like [0,1,0] and 
+                                                                # offset@atoms.get_cell() gives [0,7.73277,0] where 7.73277 is the b vector length.
                     d = np.append(d, self.neighbor_distance(atoms, c, pos))
                 c = c + 1
         close_atoms = 0
@@ -865,7 +867,7 @@ class slide_sigma3_gb:
             self.slide(atoms,disp)
     
     # Testing done, working when n is odd for linear scheme and working for all n for step scheme!
-    def slide(self, atoms, n, theta, disp, scheme=None): # disp is displacement of the second fixed layer per step. n is the number of layers per grain.
+    def slide(self, atoms, theta, disp, scheme=None, n=None): # disp is displacement of the second fixed layer per step. n is the number of layers per grain.
         if scheme=="linear" or None:
             layer_size = (atoms.get_cell()[0][0])/(2*n)
             n_free = n-1
@@ -905,7 +907,7 @@ class slide_sigma3_gb:
             return atoms
     
     # Testing done, working!
-    def run_serial(self, atoms, opt_levels, n, disp, theta, scheme=None, restart=None):
+    def run_serial(self, atoms, opt_levels, disp, theta, scheme=None, n=None, restart=None):
         calc = get_base_calc()
         set_vasp_key(calc, 'encut', 300)
         set_vasp_key(calc, 'ibrion', 2)
@@ -924,7 +926,7 @@ class slide_sigma3_gb:
                     os.mkdir(f"{j+1}")
                 except FileExistsError:
                     pass
-                atoms = self.slide(atoms, n, theta, disp, scheme=scheme)
+                atoms = self.slide(atoms, theta, disp, scheme=scheme, n=n)
                 # Editing the calc object and starting the VASP simulation.
                 levels = opt_levels.keys()
                 for level in levels:
@@ -1005,7 +1007,7 @@ class slide_sigma3_gb:
             os.chdir(cwd)
 
     # Testing done, working! However, restart option not coded.
-    def run_parallel(self, atoms, n, disp, theta, scheme=None):
+    def run_parallel(self, atoms, disp, theta, scheme=None, n=None, restart=None, largest_level=None):
         cwd = os.getcwd()
         try:
             os.mkdir(f"{int((theta/pi)*180 + 0.1)}")
@@ -1013,19 +1015,30 @@ class slide_sigma3_gb:
             pass
         os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
         traj = Trajectory(f"Trajectory_{int((theta/pi)*180 + 0.1)}_in.traj","w")
-        for j in range(self.n_steps):
-            atoms = self.slide(atoms, n, theta, disp, scheme=scheme)
-            try:
-                os.mkdir(f"{j+1}")
-            except FileExistsError:
-                pass
-            shutil.copy(cwd + "/job.sh", f"./{j+1}")
-            shutil.copy(cwd + "/run.py", f"./{j+1}")
-            os.chdir(f"./{j+1}")
-            write("POSCAR", atoms)
-            traj.write(atoms)
-            subprocess.run(["sbatch", "job.sh"])
-            os.chdir("../")
+        if restart==None or restart==False:
+            for j in range(self.n_steps):
+                atoms = self.slide(atoms, n, theta, disp, scheme=scheme)
+                try:
+                    os.mkdir(f"{j+1}")
+                except FileExistsError:
+                    pass
+                shutil.copy(cwd + "/job.sh", f"./{j+1}")
+                shutil.copy(cwd + "/geo_opt.py", f"./{j+1}")
+                os.chdir(f"./{j+1}")
+                write("POSCAR", atoms)
+                traj.write(atoms)
+                subprocess.run(["sbatch", "job.sh"])
+                os.chdir("../")
+        if restart==True:
+            for j in range(self.n_steps):
+                if os.path.exists(f"{j+1}/opt{largest_level}.OUTCAR"):
+                    pass
+                else:
+                    os.chdir(f"./{j+1}")
+                    if os.path.exists("CONTCAR"):
+                        os.rename("CONTCAR", "POSCAR")
+                    subprocess.run(["sbatch", "job.sh"])
+                    os.chdir("../")
         os.chdir(cwd)
     
     # Testing done, working!

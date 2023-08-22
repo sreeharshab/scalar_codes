@@ -7,19 +7,10 @@ from matplotlib import pyplot as plt
 
 if __name__=='__main__':
     atoms = read("POSCAR")
-    opt_levels = {
-        1: {"kpts": [1,3,3], "ismear": 0, "sigma": 0.02, "amin": 0.01},
-        2: {"kpts": [1,7,5], "amin": 0.01},
-        3: {"kpts": [1,15,9], "amin": 0.01},
-    }
     n = 11
     n_steps = 20
-    disp = (3.8663853050000001/5)   # Remember to adjust this.
     theta = (0*pi)/180
     system = slide_sigma3_gb(n_steps)
-    
-    # Running simulation
-    system.run_serial(atoms, opt_levels, n, disp, theta, scheme="step", restart=True)
 
     # Saving the output trajectory
     system.get_output_Trajectory(atoms, theta, calc_type='serial')
@@ -49,27 +40,12 @@ if __name__=='__main__':
     for i in range(n_steps+1):
         y = np.array([])
         z = np.array([])
-        # This works for 0 degree sliding
+        """This is for periodic boundary coorection in the y direction. Adjust this
+        according to your system!"""
         for j in range(indices.size):
             if (i==4) and (j > 11 and j < 17):
                 y = np.append(y, coord[j,i,0]+3.8663853)
             elif (i==5) and (j > 10 and j < 19):
-                y = np.append(y, coord[j,i,0]+3.8663853)
-            elif (i==6) and (j > 10 and j < 21):
-                y = np.append(y, coord[j,i,0]+3.8663853)
-            elif (i>=7 and i <=8) and (j > 10 and j < 22):
-                y = np.append(y, coord[j,i,0]+3.8663853)
-            elif (i==9) and (j > 11 and j < 17):
-                y = np.append(y, coord[j,i,0]+7.7327706)
-            elif (i==9) and (j ==0 or j == 11 or j >= 17):
-                y = np.append(y, coord[j,i,0]+3.8663853)
-            elif (i==10) and (j > 10 and j < 18):
-                y = np.append(y, coord[j,i,0]+7.7327706)
-            elif (i==10) and (j ==0 or j >= 18):
-                y = np.append(y, coord[j,i,0]+3.8663853)
-            elif (i==11) and (j > 10 and j < 21):
-                y = np.append(y, coord[j,i,0]+7.7327706)
-            elif (i==11) and (j >= 21):
                 y = np.append(y, coord[j,i,0]+3.8663853)
             else:
                 y = np.append(y, coord[j,i,0])
