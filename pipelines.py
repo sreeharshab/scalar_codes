@@ -776,13 +776,13 @@ def get_neighbor_list(atoms):
     # Printing neighbor list for all atoms
     for r in range(len(atoms)):
         indices, offsets = nl.get_neighbors(r)
-        f.write(f"The neighbors for {r} atom are: " + str(indices) + "\n")
+        f.write(f"The neighbors for atom {r} are: " + "\n")
         pos = []
-        f.write("Position                                Distance\n")
+        f.write("{:<10} {:<10} {:<38} {:<10}\n".format("Index", "Symbol", "Position", "Distance"))
         for i, offset in zip(indices, offsets):
             pos = atoms.positions[i] + offset @ atoms.get_cell()    # Code to account for periodic boundary condition. Offset list consists something like [0,1,0] and offset@atoms.get_cell() gives [0,7.73277,0] where 7.73277 is the b vector length.
             dist = ((atoms[r].x - pos[0])**2 + (atoms[r].y - pos[1])**2 + (atoms[r].z - pos[2])**2)**(1/2)
-            f.write(str(pos) + " " + str(dist) + "\n")
+            f.write("{:<10} {:<10} {:<38} {:<10}\n".format(str(i), str(atoms[i].symbol), str(pos), str(dist)))
     # Printing coordination number for all atoms
     f.write("\nCoordination numbers for all the atoms: \n")
     for i in range(len(atoms)):
