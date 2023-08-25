@@ -669,7 +669,7 @@ class cell_geo_opt:
 
     """ Beneficial if there is huge change in volume of the system observed 
         in equation of state analysis using either cell_opt or axis_opt.
-        Only kpoints are scaled in opt_levels. Other settings are untouched. 
+        Only kpoints are scaled in opt_levels. Other settings are untouched.
         This is an alternative for ISIF=3"""
     def run(self, init_atoms, opt_cell_atoms, n, opt_levels, init_kpts, restart=None):
         cell = init_atoms.get_cell()
@@ -803,6 +803,23 @@ def check_run_completion(location):
         if c == 0:
             print("Simulation not completed in " + location)
     os.chdir(cwd)
+
+def get_cell_info(atoms):
+    cell = atoms.get_cell()
+    
+    volume = cell.volume
+    lengths = cell.lengths()
+    angles = cell.angles()
+
+    print("Cell Vectors:")
+    print(cell[:])
+    print("Volume of the cell:", volume)
+    print("Length of vector a:", lengths[0])
+    print("Length of vector b:", lengths[1])
+    print("Length of vector c:", lengths[2])
+    print("Angle alpha:", angles[0])
+    print("Angle beta:", angles[1])
+    print("Angle gamma", angles[2])
 
 # Testing done, working!
 def create_sigma3_gb(n, top_layers, bottom_layers):
