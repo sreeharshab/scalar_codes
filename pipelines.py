@@ -859,7 +859,7 @@ class slide_sigma3_gb:
         return dist
 
     # Testing done, working!
-    def structure_corrections(self, atoms, disp):
+    def structure_corrections(self, atoms, theta, disp, scheme=None, n=None):
         cell = atoms.get_cell()
         atoms = pbc_correction(atoms)
         nat_cut = natural_cutoffs(atoms, mult=0.95)
@@ -880,8 +880,8 @@ class slide_sigma3_gb:
                 close_atoms = close_atoms + 1
         if close_atoms == 0:           
             return atoms
-        else:
-            self.slide(atoms,disp)
+        else:   # Recursive call
+            self.slide(atoms, theta, disp, scheme=scheme, n=n)
     
     # Testing done, working when n is odd for linear scheme and working for all n for step scheme!
     def slide(self, atoms, theta, disp, scheme=None, n=None): # disp is displacement of the second fixed layer per step. n is the number of layers per grain.
@@ -912,7 +912,7 @@ class slide_sigma3_gb:
                             atom.y = atom.y + disp_per_layer*count3*np.cos(theta)
                             atom.z = atom.z + disp_per_layer*count3*np.sin(theta)
                 count3 += 1
-            atoms = self.structure_corrections(atoms, disp)
+            atoms = self.structure_corrections(atoms, theta, disp, scheme=scheme, n=n)
             return atoms
         if scheme=="step":
             cell = atoms.get_cell()
@@ -920,7 +920,7 @@ class slide_sigma3_gb:
                 if atom.x > cell[0][0]/2:
                     atom.y = atom.y + disp*np.cos(theta)
                     atom.z = atom.z + disp*np.sin(theta)
-            atoms = self.structure_corrections(atoms, disp)
+            atoms = self.structure_corrections(atoms, theta, disp, scheme=scheme, n=n)
             return atoms
     
     # Testing done, working!
@@ -961,6 +961,7 @@ class slide_sigma3_gb:
                     atoms = read("CONTCAR")
                     shutil.copyfile("OUTCAR", f"{j+1}/level{level}_step{j+1}.OUTCAR")
                     shutil.copyfile("CONTCAR", f"{j+1}/level{level}_step{j+1}.vasp")
+                    shutil.copyfile("vasp.out", f"{j+1}/level{level}_step{j+1}.out")
             os.chdir(cwd)
         elif restart==True:
             cwd = os.getcwd()
@@ -976,7 +977,18 @@ class slide_sigma3_gb:
                     last_level = level
                 else:
                     break
-            tmp_atoms = read(cwd + f"/{last_step}/level{last_level}_step{last_step}.vasp")
+            try:
+                tmp_atoms = read(cwd + f"/{last_step}/level{last_level}_step{last_step}.vasp")
+            except UnboundLocalError:
+                print("NO RESTART FILES FOUND! STARTING A FRESH CALCULATION...")
+                last_step = 1
+                try:
+                    os.mkdir(f"{last_step}")
+                except FileExistsError:
+                    pass
+                tmp_atoms = read("../POSCAR")
+                tmp_atoms = self.slide(tmp_atoms, theta, disp, scheme=scheme, n=n)
+                last_level = 0
             largest_level=max(levels)
             if last_level!=largest_level:
                 for level in levels:
@@ -995,9 +1007,10 @@ class slide_sigma3_gb:
                         tmp_atoms = read("CONTCAR")
                         shutil.copyfile("OUTCAR", f"{last_step}/level{level}_step{last_step}.OUTCAR")
                         shutil.copyfile("CONTCAR", f"{last_step}/level{level}_step{last_step}.vasp")
+                        shutil.copyfile("vasp.out", f"{last_step}/level{level}_step{last_step}.out")
                 last_level=largest_level
             if last_level==largest_level:
-                tmp_atoms = self.slide(tmp_atoms, n, theta, disp, scheme=scheme)
+                tmp_atoms = self.slide(tmp_atoms, theta, disp, scheme=scheme, n=n)
                 last_step = last_step+1
             for j in range(last_step,self.n_steps+1,1):
                 try:
@@ -1020,7 +1033,8 @@ class slide_sigma3_gb:
                     tmp_atoms = read("CONTCAR")
                     shutil.copyfile("OUTCAR", f"{j}/level{level}_step{j}.OUTCAR")
                     shutil.copyfile("CONTCAR", f"{j}/level{level}_step{j}.vasp")
-                tmp_atoms = self.slide(tmp_atoms, n, theta, disp, scheme=scheme)
+                    shutil.copyfile("vasp.out", f"{j+1}/level{level}_step{j+1}.out")
+                tmp_atoms = self.slide(tmp_atoms, theta, disp, scheme=scheme, n=n)
             os.chdir(cwd)
 
     # Testing done, working! However, restart option not coded.
