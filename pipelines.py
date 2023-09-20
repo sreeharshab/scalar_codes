@@ -4,6 +4,7 @@ import subprocess
 import numpy as np
 from numpy import arctan, sin, cos, tan, pi
 from matplotlib import pyplot as plt
+from matplotlib import gridspec
 import ase
 from ase import Atom
 from ase.io import read, write, Trajectory
@@ -768,6 +769,69 @@ def dos(atoms, dense_k_points):
     atoms.get_potential_energy()
     return atoms
 
+def analyse_GCBH(save_data=None):
+    if save_data==None or save_data==True:
+        E = []
+        f = open("energies.txt", "w")
+        traj = Trajectory("grandcanonical.traj", "w")
+        os.chdir("./opt_folder")
+        dirs = os.listdir()
+        dirs = sorted(dirs)
+        for dir in dirs[:-1]:
+            os.chdir(dir)
+            atoms = read("opt3.OUTCAR")
+            e = atoms.get_potential_energy()
+            E.append(e + 5.43*80 + 3.75*8)
+            f.write(f"{e}\n")
+            traj.write(atoms)
+            os.chdir("../")
+        os.chdir("../")
+    elif save_data==False:
+        E = []
+        with open("energies.txt", "r") as f:
+            data = f.readlines()
+            for i in data:
+                E.append(float(i) + 5.43*80 + 3.75*8)
+
+    E = [i/8 for i in E]
+    E = np.array(E)
+    E = np.expand_dims(E, axis=0)
+
+    fig = plt.figure(dpi = 200, figsize=(4.5,2))
+
+    gs = gridspec.GridSpec(2, 1, height_ratios=[8, 1], figure=fig)  # Adjust the height_ratios as needed
+
+    ax1 = plt.subplot(gs[0])
+    im = ax1.imshow(E, aspect=12, cmap='YlOrRd')
+    ax1.yaxis.set_ticks([])
+    ax1.set_xlabel('Step')
+
+    ax2 = plt.subplot(gs[1])
+    colorbar = plt.colorbar(im, cax=ax2, orientation='horizontal')
+    colorbar.set_label("Aluminum Insertion Energy (eV)")
+
+    plt.subplots_adjust(hspace=1.4, bottom=0.25)
+    
+    plt.savefig("analysis_horizontal.png")
+
+    fig = plt.figure(dpi=200, figsize=(2,4))
+    E = np.squeeze(E, axis=0)
+    for i in E:
+        if i <= 0.8:    
+            plt.hlines([i], [1], [xi+0.2 for xi in [1]], linewidth=0.5)
+    ax = fig.gca()
+    for axis in ['left']:
+        ax.spines[axis].set_linewidth(1.5)
+    for axis in ['top', 'bottom', 'right']:
+        ax.spines[axis].set_linewidth(0)
+    ax.tick_params(bottom = False, top = False, left = True, right = False)
+    plt.xticks([])
+    ax.tick_params(axis = "x", direction = "in")
+    ax.tick_params(axis = "y", direction = "out")
+    ax.ticklabel_format(useOffset=False)
+    plt.ylabel("Aluminum Insertion Energy (eV)")
+    plt.savefig("analysis_vertical.png", bbox_inches="tight")
+
 # Testing done, working!
 def get_neighbor_list(atoms):
     nat_cut = natural_cutoffs(atoms, mult=1)
@@ -1033,7 +1097,7 @@ class slide_sigma3_gb:
                     tmp_atoms = read("CONTCAR")
                     shutil.copyfile("OUTCAR", f"{j}/level{level}_step{j}.OUTCAR")
                     shutil.copyfile("CONTCAR", f"{j}/level{level}_step{j}.vasp")
-                    shutil.copyfile("vasp.out", f"{j+1}/level{level}_step{j+1}.out")
+                    shutil.copyfile("vasp.out", f"{j}/level{level}_step{j}.out")
                 tmp_atoms = self.slide(tmp_atoms, theta, disp, scheme=scheme, n=n)
             os.chdir(cwd)
 
