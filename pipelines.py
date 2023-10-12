@@ -426,7 +426,7 @@ class COHP:
                 xy=(labelx, -0.05),
                 ha="right",
                 va="top",
-                color="grey",
+                color="black",
             )
             fig.savefig(
                 f"cohp-{i+1}.png",
@@ -769,7 +769,7 @@ def dos(atoms, dense_k_points):
     atoms.get_potential_energy()
     return atoms
 
-def analyse_GCBH(save_data=None):
+def analyse_GCBH(save_data=None, energy_operation=None, label=None):
     if save_data==None or save_data==True:
         E = []
         f = open("energies.txt", "w")
@@ -781,8 +781,11 @@ def analyse_GCBH(save_data=None):
             os.chdir(dir)
             atoms = read("opt3.OUTCAR")
             e = atoms.get_potential_energy()
-            E.append(e + 5.43*80 + 3.75*8)
-            f.write(f"{e}\n")
+            if energy_operation==None:
+                E.append(e)
+            else:
+                E.append(energy_operation(e))
+            f.write(f"{energy_operation(e)}\n")
             traj.write(atoms)
             os.chdir("../")
         os.chdir("../")
@@ -791,9 +794,8 @@ def analyse_GCBH(save_data=None):
         with open("energies.txt", "r") as f:
             data = f.readlines()
             for i in data:
-                E.append(float(i) + 5.43*80 + 3.75*8)
+                    E.append(float(i))
 
-    E = [i/8 for i in E]
     E = np.array(E)
     E = np.expand_dims(E, axis=0)
 
@@ -808,7 +810,7 @@ def analyse_GCBH(save_data=None):
 
     ax2 = plt.subplot(gs[1])
     colorbar = plt.colorbar(im, cax=ax2, orientation='horizontal')
-    colorbar.set_label("Aluminum Insertion Energy (eV)")
+    colorbar.set_label(label)
 
     plt.subplots_adjust(hspace=1.4, bottom=0.25)
     
@@ -816,9 +818,8 @@ def analyse_GCBH(save_data=None):
 
     fig = plt.figure(dpi=200, figsize=(2,4))
     E = np.squeeze(E, axis=0)
-    for i in E:
-        if i <= 0.8:    
-            plt.hlines([i], [1], [xi+0.2 for xi in [1]], linewidth=0.5)
+    for i in E:    
+        plt.hlines([i], [1], [xi+0.2 for xi in [1]], linewidth=0.5, color="navy")
     ax = fig.gca()
     for axis in ['left']:
         ax.spines[axis].set_linewidth(1.5)
@@ -829,7 +830,7 @@ def analyse_GCBH(save_data=None):
     ax.tick_params(axis = "x", direction = "in")
     ax.tick_params(axis = "y", direction = "out")
     ax.ticklabel_format(useOffset=False)
-    plt.ylabel("Aluminum Insertion Energy (eV)")
+    plt.ylabel(label)
     plt.savefig("analysis_vertical.png", bbox_inches="tight")
 
 # Testing done, working!
@@ -1171,7 +1172,7 @@ class slide_sigma3_gb:
             E = np.array([])
             for i in range(self.n_steps):
                 traj_atoms = read(traj+f"@{i+1}")
-                E = np.append(E, traj_atoms.get_potential_energy()/len(traj_atoms))
+                E = np.append(E, traj_atoms.get_potential_energy())
             os.chdir(cwd)
             return E
         elif property == "Stress":
@@ -1345,7 +1346,7 @@ def get_plot_settings(fig, x_label=None, y_label=None, fig_name=None, show=None)
         plt.xlabel(x_label)
     if y_label!=None:
         plt.ylabel(y_label)
-    plt.legend(frameon = False, loc = "upper left", fontsize = "7")
+    plt.legend(frameon = False, loc = "upper left", fontsize = "9")
     if fig_name!=None:
         plt.savefig(fig_name, bbox_inches='tight')
     if show == True:
