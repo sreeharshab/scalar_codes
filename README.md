@@ -32,14 +32,15 @@ All of the code is available in pipelines.py. The following are the available fe
 11. analyse_GCBH: Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using gcbh.py.
 12. get_neighbor_list: Provides the neigbor list for the system. Output is provided in Neighbor_List.txt file. Neighbors of each atom, their positions and coordination numbers of each atom are provided based on ASE's natural cutoff distances.
 13. check_run_completion: Checks for completion of a VASP job at the provided location.
-14. get_cell_info: Proivdes information about the volume, vector lengths and angles of the unit cell.
+14. get_cell_info: Provides information about the volume, vector lengths and angles of the unit cell.
+15. get_selective_dynamics: Checks whether selective dynamics is true or false for the atom corresponding to the provided index.
 
 ## Part 2: Codes to Study Grain Boundaries of Silicon 
-15. create_sigma3_gb: Creates a Σ3 grain boundary with n layers using top_grain.vasp and bottom_grain.vasp files.
-16. slide_sigma3_gb: Slides Σ3 grain boundary. Serial and parallel runs are implemented. In each run, step and linear schemes are implemented. Note that step scheme is effective for studying the stick-slip sliding behavior and linear scheme is effective for studying elastic deformation. Restart option is unavailable for parallel runs.
-17. intercalate_Li: Inserts Li in all the interstice positions of Σ3 grain boundary.
-18. symmetrize_sigma3_gb: Symmetrizes Σ3 grain boundary strucutre along y axis. This is necessary to perform surface charging calculations.
-19. cure_Si_surface_with_H: In order to study Si surfaces, it is essestial to create a bulk like environment far from the surface. To create this environment, we need to add H to one side of our surface model (with vacuum) to cure the dangling bonds. This code inserts H for (100) Si surface.
+16. create_sigma3_gb: Creates a Σ3 grain boundary with n layers using top_grain.vasp and bottom_grain.vasp files.
+17. slide_sigma3_gb: Slides Σ3 grain boundary. Serial and parallel runs are implemented. In each run, step and linear schemes are implemented. Note that step scheme is effective for studying the stick-slip sliding behavior and linear scheme is effective for studying elastic deformation.
+18. intercalate_Li: Inserts Li in all the interstice positions of Σ3 grain boundary.
+19. symmetrize_sigma3_gb: Symmetrizes Σ3 grain boundary strucutre along y axis. This is necessary to perform surface charging calculations.
+20. cure_Si_surface_with_H: In order to study Si surfaces, it is essestial to create a bulk like environment far from the surface. To create this environment, we need to add H to one side of our surface model (with vacuum) to cure the dangling bonds. This code inserts H for (100) Si surface.
 
 ## Part 3: Grand Canonical Basin Hopping
 Dr. Geng Sun, a former postdoc in Prof. Philippe Sautet's lab, developed gcbh.py. This performs a global optimization on the system in consideration based on the input modifiers.

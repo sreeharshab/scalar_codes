@@ -886,6 +886,17 @@ def get_cell_info(atoms):
     print("Angle beta:", angles[1])
     print("Angle gamma", angles[2])
 
+def get_selective_dynamics(file_name, index):
+    with open(file_name,'r') as f:
+        lines = f.readlines()
+    
+    line = lines[index+9]
+
+    if "T" in line:
+        return True
+    elif "F" in line:
+        return False
+
 # Testing done, working!
 def create_sigma3_gb(n, top_layers, bottom_layers):
     top_layers = top_layers*(n,1,1) # Repeating the layers.
@@ -1163,11 +1174,23 @@ class slide_sigma3_gb:
             os.chdir("../")
         os.chdir(cwd)
 
-    # Testing done for calc_type="Energy", working! 0th step energy not included (should work on it)!
+    # Testing done for calc_type="Energy" and "Force", working!
     def analysis(self, theta, property=None):
         cwd = os.getcwd()
         os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
         traj = f"Trajectory_{int((theta/pi)*180 + 0.1)}_out.traj"
+        
+        # Automation code to find max level in the simulation
+        level = 1
+        os.chdir("./1")
+        while level!=0:
+            if os.path.exists(f"level{level}_step1.OUTCAR"):
+                level+=1
+            else:
+                break
+        max_level=level-1
+        os.chdir("../")
+        
         if property == "Energy":
             E = np.array([])
             for i in range(self.n_steps):
@@ -1182,6 +1205,20 @@ class slide_sigma3_gb:
                 S = np.append(S, traj_atoms.get_stress()[2])
             os.chdir(cwd)
             return S
+        elif property == "Force":
+            F = np.array([])
+            for i in range(self.n_steps):
+                force_list = np.array([])
+                traj_atoms = read(traj+f"@{i+1}")
+                for atom in traj_atoms:
+                    if get_selective_dynamics(f"./{i+1}/level{max_level}_step{i+1}.vasp", atom.index)==False:
+                        force_xyz = traj_atoms.get_forces()[atom.index]
+                        force_xyz = np.array(force_xyz)
+                        force = np.linalg.norm(force_xyz)
+                        force_list = np.append(force_list, force)
+                F = np.append(F, np.mean(force_list))
+            os.chdir(cwd)
+            return F
     
     # Testing done, working!
     # Layer counting starts from 0. The grain boundary is 10th and 11th layers.
