@@ -44,7 +44,7 @@ def get_base_calc():
         lcharg=False,
         ncore=16,
         prec="Normal",
-        encut=400,
+        encut=300,
         ediff=1e-6,
         algo="VeryFast",
         ismear=-5,
@@ -154,8 +154,8 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
             # default settings when using built-in optimizer
             set_vasp_key(calc, 'ibrion', 2)
             set_vasp_key(calc, 'ediffg', -1e-2)
-            set_vasp_key(calc, 'nsw', 200)
-            set_vasp_key(calc, 'nelm', 200)
+            set_vasp_key(calc, 'nsw', 500)
+            set_vasp_key(calc, 'nelm', 500)
             # user-supplied overrides
             for key in level_settings.keys():
                 set_vasp_key(calc, key, level_settings[key])
@@ -166,8 +166,8 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
             calc = get_base_calc()
             atoms_tmp = read("OUTCAR", index=-1)
             shutil.copyfile("CONTCAR", f"opt{level}.vasp")
-            shutil.copyfile("vasprun.xml", f"opt{level}.xml")
             shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
+            shutil.copyfile("vasp.out", f"opt{level}.out")
     elif mode == 'ase':
         atoms_tmp = atoms.copy()
         from ase.optimize import BFGS
@@ -189,8 +189,9 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
                        logfile = f"opt{level}.log")
             opt.run(fmax=fmax)
             calc.reset()
-            shutil.copyfile("vasprun.xml", f"opt{level}.xml")
+            shutil.copyfile("CONTCAR", f"opt{level}.vasp")
             shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
+            shutil.copyfile("vasp.out", f"opt{level}.out")
             
     return atoms_tmp
 
@@ -1327,47 +1328,88 @@ class intercalate_Li:
         return atoms
 
 
-# Testing done, working for n=1!
-def symmetrize_sigma3_gb(atoms, layer, n):    # For surface charging, n is the number of fixed layers.
+# # Testing done, working for n=1!
+# def symmetrize_sigma3_gb(atoms, layer, n):    # For surface charging, n is the number of fixed layers.
+#     cell = atoms.get_cell()
+#     layer_size = layer.get_cell()[1][1]
+#     y_size = cell[1][1]
+#     for i in range(n):
+#         for atom in atoms:
+#             atom.y = atom.y + layer_size
+#         y_size = y_size + layer_size
+#         atoms.set_cell([cell[0][0], y_size, cell[2][2]])
+#         atoms = atoms + layer
+#     tmp_atoms = atoms.copy()
+#     tmp_cell = atoms.get_cell()
+#     for atom in tmp_atoms:
+#         if atom.y > n*layer_size:
+#             atom.y = n*layer_size - atom.y
+#     del tmp_atoms[[atom.index for atom in tmp_atoms if atom.y < n*layer_size and atom.y > 0]]
+#     new_atoms = atoms + tmp_atoms
+#     y_total = tmp_cell[1][1] + cell[1][1]
+#     new_atoms.set_cell([cell[0][0], y_total, cell[2][2]])
+#     new_atoms.center()
+#     c = FixAtoms(indices=[atom.index for atom in new_atoms if atom.y>cell[1][1] and atom.y<(cell[1][1]+layer_size)])
+#     new_atoms.set_constraint(c)
+#     new_atoms.center(vacuum = 15, axis = (1))
+#     return new_atoms
+
+def symmetrize_Si100_surface(atoms, delete_layers=None):
     cell = atoms.get_cell()
-    layer_size = layer.get_cell()[1][1]
-    y_size = cell[1][1]
-    for i in range(n):
-        for atom in atoms:
-            atom.y = atom.y + layer_size
-        y_size = y_size + layer_size
-        atoms.set_cell([cell[0][0], y_size, cell[2][2]])
-        atoms = atoms + layer
-    tmp_atoms = atoms.copy()
-    tmp_cell = atoms.get_cell()
-    for atom in tmp_atoms:
-        if atom.y > n*layer_size:
-            atom.y = n*layer_size - atom.y
-    del tmp_atoms[[atom.index for atom in tmp_atoms if atom.y < n*layer_size and atom.y > 0]]
-    new_atoms = atoms + tmp_atoms
-    y_total = tmp_cell[1][1] + cell[1][1]
-    new_atoms.set_cell([cell[0][0], y_total, cell[2][2]])
-    new_atoms.center()
-    c = FixAtoms(indices=[atom.index for atom in new_atoms if atom.y>cell[1][1] and atom.y<(cell[1][1]+layer_size)])
-    new_atoms.set_constraint(c)
-    new_atoms.center(vacuum = 15, axis = (1))
-    return new_atoms
+    b = cell[1,1]
+    c_per_layer = 1.1878125+0.1875  # Per layer of the Si surface
+    atoms.center(axis=2)
+    base_z = np.array([atom.z for atom in atoms]).min()
+    base_layer_index = [atom.index for atom in atoms if abs(base_z - atom.z) < 0.1]
+
+    # Symmetrizing the surface around the base layer center
+    base_layer_center = np.array([atom.position for atom in atoms[base_layer_index]]).mean(axis=0)
+    inverted_atoms = atoms.copy()
+
+    # Symmetrizing atoms around the base layer center and manipulating to match middle layers
+    for atom in inverted_atoms:
+        atom.position = 2 * base_layer_center - atom.position
+        atom.z = atom.z - c_per_layer
+        atom.y = atom.y - b/4
+    atoms += inverted_atoms
+
+    # Applying contraints to atoms in middle layer to preserve bulk
+    del atoms.constraints
+    atoms.center()
+    constraint_indices = [atom.index for atom in atoms if atom.z < cell[2,2]/2 + 4*c_per_layer and atom.z > cell[2,2]/2 - 4*c_per_layer]
+    constraints = FixAtoms(indices=constraint_indices)
+    atoms.set_constraint(constraints)
+
+    # Final corrections
+    cell[2,2] = 65
+    atoms.set_cell(cell)
+    atoms.center()
+
+    return atoms
 
 # Testing done, working!
-def cure_Si_surface_with_H(atoms):
+def cure_Si_surface_with_H(atoms, upper=None):
     nat_cut = natural_cutoffs(atoms, mult=1)
     nl = NeighborList(nat_cut, self_interaction=False, bothways=True)
     nl.update(atoms)
-    cell = atoms.get_cell()[1][1]
+    cell_z = atoms.get_cell()[2,2]
     for i in range(len(atoms)):
         indices, _ = nl.get_neighbors(i)
-        if len(indices) == 3:
-            if atoms[i].y > cell/2:
-                coord = (atoms[i].x, atoms[i].y + 1.5, atoms[i].z)
-            if atoms[i].y < cell/2:
-                coord = (atoms[i].x, atoms[i].y - 1.5, atoms[i].z)
-            H_atom = Atom("H", coord)
-            atoms.append(H_atom)
+        if len(indices) < 4:
+            if upper==True and atoms[i].z > cell_z/2:
+                coord_1 = (atoms[i].x, atoms[i].y + 1.06, atoms[i].z + 1.06)
+                coord_2 = (atoms[i].x, atoms[i].y - 1.06, atoms[i].z + 1.06)
+                H_atom_1 = Atom("H", coord_1)
+                H_atom_2 = Atom("H", coord_2)
+                atoms.append(H_atom_1)
+                atoms.append(H_atom_2)
+            if atoms[i].z < cell_z/2:
+                coord_1 = (atoms[i].x, atoms[i].y + 1.06, atoms[i].z - 1.06)
+                coord_2 = (atoms[i].x, atoms[i].y - 1.06, atoms[i].z - 1.06)
+                H_atom_1 = Atom("H", coord_1)
+                H_atom_2 = Atom("H", coord_2)
+                atoms.append(H_atom_1)
+                atoms.append(H_atom_2)
     return atoms
 
 # Testing done, working!
