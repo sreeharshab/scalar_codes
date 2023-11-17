@@ -1354,11 +1354,21 @@ class intercalate_Li:
 #     new_atoms.center(vacuum = 15, axis = (1))
 #     return new_atoms
 
-def symmetrize_Si100_surface(atoms, delete_layers=None):
+def symmetrize_Si100_surface(atoms, n_fixed_layers=4, delete_layers=None):
     cell = atoms.get_cell()
     b = cell[1,1]
     c_per_layer = 1.1878125+0.1875  # Per layer of the Si surface
     atoms.center(axis=2)
+    base_z = np.array([atom.z for atom in atoms]).min()
+    if delete_layers!=None:
+        delete_layers = delete_layers/2
+        delete_length = delete_layers*c_per_layer + base_z - 0.1    # 0.1 is the tolerance for delete_length
+        delete_indices = np.array([])
+        for atom in atoms:
+            if atom.z>=base_z and atom.z<delete_length:
+                delete_indices = np.append(delete_indices, atom.index)
+        delete_indices = np.array([int(i) for i in delete_indices])
+        del atoms[delete_indices]
     base_z = np.array([atom.z for atom in atoms]).min()
     base_layer_index = [atom.index for atom in atoms if abs(base_z - atom.z) < 0.1]
 
@@ -1376,7 +1386,8 @@ def symmetrize_Si100_surface(atoms, delete_layers=None):
     # Applying contraints to atoms in middle layer to preserve bulk
     del atoms.constraints
     atoms.center()
-    constraint_indices = [atom.index for atom in atoms if atom.z < cell[2,2]/2 + 4*c_per_layer and atom.z > cell[2,2]/2 - 4*c_per_layer]
+    n_fixed_layers = n_fixed_layers/2
+    constraint_indices = [atom.index for atom in atoms if atom.z < cell[2,2]/2 + n_fixed_layers*c_per_layer and atom.z > cell[2,2]/2 - n_fixed_layers*c_per_layer]
     constraints = FixAtoms(indices=constraint_indices)
     atoms.set_constraint(constraints)
 
@@ -1413,7 +1424,7 @@ def cure_Si_surface_with_H(atoms, upper=None):
     return atoms
 
 # Testing done, working!
-def get_plot_settings(fig, x_label=None, y_label=None, fig_name=None, show=None):
+def get_plot_settings(fig, x_label=None, y_label=None, fig_name=None, legend_location="upper left", show=None):
     ax = fig.gca()
     for axis in ['top', 'bottom', 'left', 'right']:
         ax.spines[axis].set_linewidth(1.5)
@@ -1422,10 +1433,10 @@ def get_plot_settings(fig, x_label=None, y_label=None, fig_name=None, show=None)
     ax.tick_params(axis = "y", direction = "in")
     ax.ticklabel_format(useOffset=False)    # To prevent the power scaling of the axes
     if x_label!=None:
-        plt.xlabel(x_label)
+        plt.xlabel(x_label, fontsize=12)
     if y_label!=None:
-        plt.ylabel(y_label)
-    plt.legend(frameon = False, loc = "upper left", fontsize = "9")
+        plt.ylabel(y_label, fontsize=12)
+    plt.legend(frameon = False, loc = legend_location, fontsize = "10")
     if fig_name!=None:
         plt.savefig(fig_name, bbox_inches='tight')
     if show == True:

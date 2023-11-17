@@ -35,7 +35,7 @@ All of the code is available in pipelines.py. The following are the available fe
 14. get_cell_info: Provides information about the volume, vector lengths and angles of the unit cell.
 15. get_selective_dynamics: Checks whether selective dynamics is true or false for the atom corresponding to the provided index.
 
-## Part 2: Codes to Study Grain Boundaries of Silicon 
+## Part 2: Codes to Study Silicon Systems
 16. create_sigma3_gb: Creates a Σ3 grain boundary with n layers using top_grain.vasp and bottom_grain.vasp files.
 17. slide_sigma3_gb: Slides Σ3 grain boundary. Serial and parallel runs are implemented. In each run, step and linear schemes are implemented. Note that step scheme is effective for studying the stick-slip sliding behavior and linear scheme is effective for studying elastic deformation.
 18. intercalate_Li: Inserts Li in all the interstice positions of Σ3 grain boundary.
