@@ -21,6 +21,7 @@ from ase.visualize import view
 from ase.constraints import FixAtoms
 from ase.vibrations import Vibrations
 import pandas as pd
+import re
 
 logo = r""" ____  _            _ _                 
 |  _ \(_)_ __   ___| (_)_ __   ___  ___ 
@@ -630,6 +631,81 @@ def pbc_correction(atoms):
             atom.z = atom.z - cell[2][2]
     return atoms
 
+class surface_charging:
+    def __init__(self) -> None:
+        pass
+
+    def get_PZC_nelect(self):
+        os.chdir("vacuum_calc")
+        with open('OUTCAR', 'r') as f:
+            for line in f:
+                match = re.search(r'NELECT\s+=\s+(\d+\.\d+)', line)
+                if match:
+                    PZC_nelect = match.group(1)
+                    break
+        os.chdir("../")
+        return float(PZC_nelect)
+    
+    """
+    n_nelect are the number of nelects you want to run surface charging for.
+    width_nelect is the difference between each nelect.
+    Example:
+    If PZC_nelect = 40, n_nelect = 4 and width_nelect = 0.25, the values of nelect will be [39.50, 39.75, 40, 40.25, 40.50].
+    *kwargs are used to get the arguments of the symmetrize function.
+    """
+    def run(self, atoms, encut, kpts, n_nelect, width_nelect, symmetrize_function=None, **kwargs):
+        if symmetrize_function!=None:
+            atoms = symmetrize_function(atoms, **kwargs)
+            write("POSCAR", atoms)
+        
+        single_point_calc = False
+        if os.path.exists("./vacuum_calc/OUTCAR"):
+            single_point_calc = check_run_completion("./vacuum_calc")
+        
+        if single_point_calc==False:
+            try:
+                os.mkdir("vacuum_calc")
+            except FileExistsError:
+                pass
+            os.chdir("vacuum_calc")
+            calc = get_base_calc()
+            set_vasp_key(calc, "lwave", True)
+            set_vasp_key(calc, "encut", encut)
+            set_vasp_key(calc, "kpts", kpts)
+            set_vasp_key(calc, "ibrion", -1)
+            set_vasp_key(calc, "nsw", 0)
+            set_vasp_key(calc, "amin", 0.01)
+            atoms.calc = calc
+            atoms.get_potential_energy()
+            shutil.copyfile("WAVECAR", "../WAVECAR")
+            os.chdir("../")
+        
+        PZC_nelect = self.get_PZC_nelect()
+        
+        n_nelect = int(n_nelect/2)
+        nelect = np.arange(PZC_nelect-n_nelect*width_nelect, PZC_nelect+n_nelect*width_nelect+width_nelect, width_nelect)
+        
+        for i in nelect:
+            try:
+                os.mkdir(f"{i}")
+            except FileExistsError:
+                pass
+            shutil.copyfile("WAVECAR", f"./{i}/WAVECAR")
+            shutil.copyfile("POSCAR", f"./{i}/POSCAR")
+            shutil.copyfile("geo_opt.py", f"./{i}/geo_opt.py")
+            shutil.copyfile("optimize.sh", f"./{i}/optimize.sh")
+            os.chdir(f"{i}")
+            
+            subprocess.run(["sed", "-i", f"s/nnn/{str(i)}/g", "geo_opt.py"])
+
+            subprocess.run(["sbatch", "optimize.sh"])
+            os.chdir("../")
+    
+    def analyse(self):
+        PZC_nelect = self.get_PZC_nelect()
+        subprocess.run(["python", "new_plot_sc.py", "-n", f"{PZC_nelect}"])
+
+
 # Testing done, working!
 class cell_geo_opt:
     def __init__(self):
@@ -866,9 +942,11 @@ def check_run_completion(location):
         for line in content:
             if line == " General timing and accounting informations for this job:\n":
                 c = c + 1
-        if c == 0:
-            print("Simulation not completed in " + location)
     os.chdir(cwd)
+    if c == 0:
+        return False
+    else:
+        return True
 
 def get_cell_info(atoms):
     cell = atoms.get_cell()
