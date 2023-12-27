@@ -15,7 +15,7 @@ if __name__=='__main__':
     # Running simulation
     system.run_parallel(atoms, disp, theta, scheme="step", restart=False)
     # # If scheme="linear"
-    # system.run_serial(atoms, opt_levels, disp, theta, scheme="linear", n=n, restart=False)
+    # system.run_parallel(atoms, opt_levels, disp, theta, scheme="linear", n=n, restart=False)
     # # If restart=True and scheme="linear"
-    # system.run_serial(atoms, opt_levels, disp, theta, scheme="linear", n=n, restart=True, largest_level=3)
+    # system.run_parallel(atoms, opt_levels, disp, theta, scheme="linear", n=n, restart=True, largest_level=3)
     # # largest_level is the largest level in geo_opt.py.

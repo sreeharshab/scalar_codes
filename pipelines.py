@@ -136,6 +136,7 @@ def axis_opt(atoms, axis, npoints=5, eps=0.04, settings=None):
     return atoms
 
 
+# todo: Program restart option!
 def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
     calc = get_base_calc()
     if not opt_levels:
@@ -195,42 +196,6 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
             shutil.copyfile("vasp.out", f"opt{level}.out")
             
     return atoms_tmp
-
-
-def freq(atoms, mode="vasp"):
-    calc = get_base_calc()
-    if "kpts" in atoms.info.keys():
-        kpts = atoms.info["kpts"]
-    else:
-        kpts = [1, 7, 5]
-    calc.set(kpts=kpts)
-
-    if mode == "vasp":
-        # avoid this on large structures
-        # ncore/npar unusable, leads to kpoint errors
-        # isym must be switched off, leading to large memory usage
-        calc.set(
-            ibrion=5,
-            potim=0.015,
-            nsw=500,  # as many dofs as needed
-            ncore=None,  # avoids error of 'changing kpoints'
-            npar=None,
-            isym=0,
-        )  # turn off symmetry
-
-        atoms.calc = calc
-        atoms.get_potential_energy()
-        # todo: parse OUTCAR frequencies and modes
-    elif mode == "ase":
-        calc.set(lwave=True, isym=-1)  # according to michael
-        atoms.calc = calc
-        constr = atoms.constraints
-        constr = [c for c in constr if isinstance(c, FixAtoms)]
-        vib_index = [a.index for a in atoms if a.index not in constr[0].index]
-        vib = Vibrations(atoms, indices=vib_index)
-        vib.run()  # this will save json files
-        vib.summary()
-
 
 def bader(atoms):
     def run_vasp(atoms):
@@ -631,12 +596,60 @@ def pbc_correction(atoms):
             atom.z = atom.z - cell[2][2]
     return atoms
 
+def frequency(atoms, mode="vasp", scheme="serial", settings=None):
+    calc = get_base_calc()
+    if settings["kpts"]==None:
+        settings["kpts"]=atoms.info["kpts"]
+    keys = settings.keys()
+    for key in keys:
+        set_vasp_key(calc, key, settings[key])
+
+    if mode == "vasp":
+        # avoid this on large structures
+        # ncore/npar unusable, leads to kpoint errors
+        # isym must be switched off, leading to large memory usage
+        calc.set(
+            ibrion=5,
+            potim=0.015,
+            nsw=500,  # as many dofs as needed
+            ncore=None,  # avoids error of 'changing kpoints'
+            npar=None,
+            isym=0,
+        )  # turn off symmetry
+
+        atoms.calc = calc
+        atoms.get_potential_energy()
+        # todo: parse OUTCAR frequencies and modes
+    elif mode == "ase":
+        calc.set(lwave=True, isym=-1)  # according to michael
+        atoms.calc = calc
+        constr = atoms.constraints
+        constr = [c for c in constr if isinstance(c, FixAtoms)]
+        if constr!=[]:
+            vib_indices = [a.index for a in atoms if a.index not in constr[0].index]
+        elif constr==[]:
+            vib_indices = [a.index for a in atoms]
+        if scheme=="serial":
+            vib = Vibrations(atoms, indices=vib_indices)
+            vib.run()  # this will save json files
+            vib.summary(log="vibrations.txt")
+            return vib.get_energies()
+        elif scheme=="parallel":
+            for index in vib_indices:
+                try:
+                    os.mkdir(f"{index}")
+                except FileExistsError:
+                    pass
+            os.chdir(f"{index}")
+            # todo: complete parallel scheme
+
 class surface_charging:
     def __init__(self) -> None:
         pass
 
+    # Parsing the OUTCAR to get NELECT.
     def get_PZC_nelect(self):
-        os.chdir("vacuum_calc")
+        os.chdir("PZC_calc")
         with open('OUTCAR', 'r') as f:
             for line in f:
                 match = re.search(r'NELECT\s+=\s+(\d+\.\d+)', line)
@@ -650,48 +663,41 @@ class surface_charging:
     n_nelect are the number of nelects you want to run surface charging for.
     width_nelect is the difference between each nelect.
     Example:
-    If PZC_nelect = 40, n_nelect = 4 and width_nelect = 0.25, the values of nelect will be [39.50, 39.75, 40, 40.25, 40.50].
-    *kwargs are used to get the arguments of the symmetrize function.
+    If PZC_nelect = 40, n_nelect = 4 and width_nelect = 0.25, the values of nelect will be [39.50, 39.75, 40.25, 40.50].
+    **kwargs are used to get the arguments of the symmetrize function.
     """
-    def run(self, atoms, encut, kpts, n_nelect, width_nelect, symmetrize_function=None, **kwargs):
+    def run(self, atoms, opt_levels, n_nelect, width_nelect, symmetrize_function=None, **kwargs):
         if symmetrize_function!=None:
             atoms = symmetrize_function(atoms, **kwargs)
-            write("POSCAR", atoms)
-        
-        single_point_calc = False
-        if os.path.exists("./vacuum_calc/OUTCAR"):
-            single_point_calc = check_run_completion("./vacuum_calc")
-        
-        if single_point_calc==False:
+            write("POSCAR_sym", atoms)
+
+        # Running a neutral solvation (PZC) calculation.
+        PZC_calc = False
+        last_level = len(opt_levels)
+        if os.path.exists(f"./POSCAR_solvated"):
+            PZC_calc = True
+        if PZC_calc==False:
             try:
-                os.mkdir("vacuum_calc")
+                os.mkdir(f"PZC_calc")
             except FileExistsError:
                 pass
-            os.chdir("vacuum_calc")
-            calc = get_base_calc()
-            set_vasp_key(calc, "lwave", True)
-            set_vasp_key(calc, "encut", encut)
-            set_vasp_key(calc, "kpts", kpts)
-            set_vasp_key(calc, "ibrion", -1)
-            set_vasp_key(calc, "nsw", 0)
-            set_vasp_key(calc, "amin", 0.01)
-            atoms.calc = calc
-            atoms.get_potential_energy()
-            shutil.copyfile("WAVECAR", "../WAVECAR")
+            os.chdir("PZC_calc")
+            geo_opt(atoms, mode="vasp", opt_levels=opt_levels)
+            shutil.copyfile("CONTCAR", "../POSCAR_solvated")
             os.chdir("../")
         
         PZC_nelect = self.get_PZC_nelect()
         
         n_nelect = int(n_nelect/2)
         nelect = np.arange(PZC_nelect-n_nelect*width_nelect, PZC_nelect+n_nelect*width_nelect+width_nelect, width_nelect)
+        nelect = np.delete(nelect,n_nelect) # Excluding PZC_nelect.
         
         for i in nelect:
             try:
                 os.mkdir(f"{i}")
             except FileExistsError:
                 pass
-            shutil.copyfile("WAVECAR", f"./{i}/WAVECAR")
-            shutil.copyfile("POSCAR", f"./{i}/POSCAR")
+            shutil.copyfile("POSCAR_solvated", f"./{i}/POSCAR")
             shutil.copyfile("geo_opt.py", f"./{i}/geo_opt.py")
             shutil.copyfile("optimize.sh", f"./{i}/optimize.sh")
             os.chdir(f"{i}")
@@ -700,6 +706,8 @@ class surface_charging:
 
             subprocess.run(["sbatch", "optimize.sh"])
             os.chdir("../")
+        
+        os.rename("PZC_calc", f"{PZC_nelect}")
     
     def analyse(self):
         PZC_nelect = self.get_PZC_nelect()
@@ -858,9 +866,9 @@ def analyse_GCBH(save_data=None, energy_operation=None, label=None):
             os.chdir(dir)
             atoms = read("opt3.OUTCAR")
             e = atoms.get_potential_energy()
-            if energy_operation==None:
+            if energy_operation==None or energy_operation==False:
                 E.append(e)
-            else:
+            elif energy_operation==True:
                 E.append(energy_operation(e))
             f.write(f"{energy_operation(e)}\n")
             traj.write(atoms)
@@ -933,10 +941,10 @@ def get_neighbor_list(atoms):
         f.write(str(i) + " " + str(len(indices)) + "\n")
 
 # Testing done, working!
-def check_run_completion(location):
+def check_run_completion(location, output="OUTCAR"):
     cwd = os.getcwd()
     os.chdir(location)
-    with open("OUTCAR", "r") as f:
+    with open(output, "r") as f:
         content = f.readlines()
         c = 0
         for line in content:
@@ -1432,15 +1440,15 @@ class intercalate_Li:
 #     new_atoms.center(vacuum = 15, axis = (1))
 #     return new_atoms
 
-def symmetrize_Si100_surface(atoms, n_fixed_layers=4, delete_layers=None):
+def symmetrize_Si100_surface(atoms, n_fixed_layers=4, n_delete_layers=None, vacuum=15):
     cell = atoms.get_cell()
     b = cell[1,1]
     c_per_layer = 1.1878125+0.1875  # Per layer of the Si surface
     atoms.center(axis=2)
     base_z = np.array([atom.z for atom in atoms]).min()
-    if delete_layers!=None:
-        delete_layers = delete_layers/2
-        delete_length = delete_layers*c_per_layer + base_z - 0.1    # 0.1 is the tolerance for delete_length
+    if n_delete_layers!=None:
+        n_delete_layers = n_delete_layers/2
+        delete_length = n_delete_layers*c_per_layer + base_z - 0.1    # 0.1 is the tolerance for delete_length
         delete_indices = np.array([])
         for atom in atoms:
             if atom.z>=base_z and atom.z<delete_length:
@@ -1470,7 +1478,12 @@ def symmetrize_Si100_surface(atoms, n_fixed_layers=4, delete_layers=None):
     atoms.set_constraint(constraints)
 
     # Final corrections
-    cell[2,2] = 65
+    pos = atoms.get_positions()
+    z_max = max(pos[:,2])
+    z_min = min(pos[:,2])
+    init_vacuum = z_min + (cell[2,2] - z_max)
+    vacuum_change = vacuum*2 - init_vacuum
+    cell[2,2] = cell[2,2] + vacuum_change
     atoms.set_cell(cell)
     atoms.center()
 
