@@ -35,7 +35,6 @@ print("Sree Harsha Bhimineni\nYantao Xia\nUniversity of California, Los Angeles\
 
 """VASP related codes using ASE"""
 
-# Testing done, working!
 def get_base_calc():
     base_calc = Vasp(
         gga="PE",
@@ -53,7 +52,6 @@ def get_base_calc():
     )
     return base_calc
 
-# Testing done, working!
 # See ASE documentation for more information on why this is necessary.
 def set_vasp_key(calc, key, value):
     if key in float_keys:
@@ -85,15 +83,14 @@ def set_vasp_key(calc, key, value):
         calc.input_params[key] = value
 
 """Yantao's code"""
-def cell_opt(atoms, npoints=5, eps=0.04, settings=None):
+def cell_opt(atoms, kpts, npoints=5, eps=0.04, addnl_settings=None):
     calc = get_base_calc()
 
-    if settings["kpts"]==None:
-        settings["kpts"]=atoms.info["kpts"]
-    calc.set(ibrion=-1, nsw=0)
-    keys = settings.keys()
-    for key in keys:
-        set_vasp_key(calc, key, settings[key])
+    calc.set(ibrion=-1, nsw=0, kpts=kpts)
+    if addnl_settings!=None:
+        keys = addnl_settings.keys()
+        for key in keys:
+            set_vasp_key(calc, key, addnl_settings[key])
     atoms.calc = calc
 
     eos = calculate_eos(atoms, npoints=npoints, eps=eps, trajectory="eos.traj")
@@ -106,10 +103,8 @@ def cell_opt(atoms, npoints=5, eps=0.04, settings=None):
     return atoms
 
 
-def axis_opt(atoms, axis, npoints=5, eps=0.04, settings=None):
+def axis_opt(atoms, kpts, axis, npoints=5, eps=0.04, addnl_settings=None):
     """relax one vector of the cell"""
-    if settings["kpts"]==None:
-        settings["kpts"] = atoms.info["kpts"]
     ens = np.zeros(npoints)
     vols = np.zeros(npoints)
 
@@ -120,10 +115,11 @@ def axis_opt(atoms, axis, npoints=5, eps=0.04, settings=None):
         atoms_tmp = atoms.copy()
         atoms_tmp.cell[axis] = atoms.cell[axis] * factor
         calc = get_base_calc()
-        calc.set(ibrion=-1, nsw=0, directory=f"{factor:.2f}")
-        keys = settings.keys()
-        for key in keys:
-            set_vasp_key(calc, key, settings[key])
+        calc.set(ibrion=-1, nsw=0, kpts=kpts, directory=f"{factor:.2f}")
+        if addnl_settings!=None:
+            keys = addnl_settings.keys()
+            for key in keys:
+                set_vasp_key(calc, key, addnl_settings[key])
         atoms_tmp.calc = calc
         ens[ifactor] = atoms_tmp.get_potential_energy()
         vols[ifactor] = atoms_tmp.get_volume()
@@ -197,19 +193,16 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
             
     return atoms_tmp
 
-def bader(atoms):
+def bader(atoms, kpts, valence_electrons, addnl_settings=None):
     def run_vasp(atoms):
         calc = get_base_calc()
-
-        if "kpts" in atoms.info.keys():
-            kpts = atoms.info["kpts"]
-        else:
-            kpts = [1, 7, 5]
-
+        
         calc.set(
             ibrion=-1, nsw=0, lorbit=12, lcharg=True, laechg=True, kpts=kpts
         )
-
+        if addnl_settings!=None:
+            for key in addnl_settings.keys():
+                set_vasp_key(calc, key, addnl_settings[key])
         atoms.calc = calc
         atoms.get_potential_energy()
         assert os.path.exists("AECCAR0"), "chgsum.pl: AECCAR0 not found"
@@ -239,11 +232,10 @@ def bader(atoms):
             skiprows=[1, latoms + 2, latoms + 3, latoms + 4, latoms + 5],
         )
         charges = df["CHARGE"].to_numpy()
-        n_si = len([a for a in atoms if a.symbol == "Si"])
-        n_o = len([a for a in atoms if a.symbol == "O"])
-        n_al = len([a for a in atoms if a.symbol == "Al"])
-
-        ocharges = np.array([4] * n_si + [3] * n_al + [6] * n_o)
+        ocharges = np.array([])
+        for atom in atoms:
+            ocharges = np.append(ocharges, valence_electrons[atom.symbol])
+        ocharges = np.array([int(i) for i in ocharges])
         dcharges = -charges + ocharges
         atoms.set_initial_charges(np.round(dcharges, 2))
 
@@ -275,17 +267,17 @@ class COHP:
 
         self.lobsterin_template = template
 
-    def run_vasp(self, kpts):
+    def run_vasp(self, kpts, valence_electrons, addnl_settings=None):
         atoms = self.atoms
         calc = get_base_calc()
         calc.set(ibrion=-1, nsw=0, isym=-1, prec="Accurate", kpts=kpts, lwave=True, lcharg=True)
+        if addnl_settings!=None:
+            for key in addnl_settings.keys():
+                set_vasp_key(calc, key, addnl_settings[key])
 
-        n_si = len([a for a in atoms if a.symbol == "Si"])
-        n_o = len([a for a in atoms if a.symbol == "O"])
-        n_al = len([a for a in atoms if a.symbol == "Al"])
-        n_li = len([a for a in atoms if a.symbol == "Li"])
-
-        nelect = n_si * 4 + n_o * 6 + n_al * 3 + n_li * 1
+        nelect = 0
+        for atom in atoms:
+            nelect = nelect + valence_electrons[atom.symbol]
         calc.set(nbands=nelect + 20)  # giving 20 empty bands. May require more since the number of bands can be > number of basis functions, but not less!
 
         atoms.calc = calc
@@ -367,7 +359,7 @@ class COHP:
             ax1.tick_params(axis="x", colors="k")
             # ICOHP
             ax2 = ax1.twiny()
-            ax2.plot(-data_cohp[:, i * 2 + 4], data_cohp[:, 0], color="grey")
+            ax2.plot(-data_cohp[:, i * 2 + 4], data_cohp[:, 0], color="grey", linestyle="dashdot")
             ax2.set_ylim(icohp_ylim)  # [-10, 6]
             ax2.set_xlim(icohp_xlim)  # [-0.01, 1.5]
             ax2.set_xlabel("-ICOHP (eV)", color="grey", fontsize="large")
@@ -378,21 +370,21 @@ class COHP:
             # legends
             ax1.axvline(0, color="k", linestyle=":", alpha=0.5)
             ax1.axhline(0, color="k", linestyle="--", alpha=0.5)
-            labelx = max(icohp_xlim) - 0.05
-            labely = max(icohp_ylim) - 0.5
+            labelx = min(icohp_xlim) + 0.2
+            labely = min(icohp_ylim) + 0.5
 
             ax2.annotate(
                 labels_cohp[i],
                 xy=(labelx, labely),
-                ha="right",
-                va="top",
+                ha="left",
+                va="bottom",
                 bbox=dict(boxstyle="round", fc="w", alpha=0.5),
             )
             ax2.annotate(
                 f"{-icohp_ef[i]:.3f}",
                 xy=(labelx, -0.05),
-                ha="right",
-                va="top",
+                ha="left",
+                va="bottom",
                 color="black",
             )
             fig.savefig(
@@ -402,7 +394,6 @@ class COHP:
                 transparent=True,
             )
             plt.close()
-
 
 class NEB:
     def __init__(self, initial, final):
@@ -582,7 +573,6 @@ class Dimer:
 
 """End of Yantao's code"""
 
-# Testing done, working!
 def pbc_correction(atoms):
     cell = atoms.get_cell()
     for atom in atoms:
@@ -706,142 +696,12 @@ class surface_charging:
 
             subprocess.run(["sbatch", "optimize.sh"])
             os.chdir("../")
-        
-        os.rename("PZC_calc", f"{PZC_nelect}")
     
     def analyse(self):
         PZC_nelect = self.get_PZC_nelect()
+        os.rename("PZC_calc", f"{PZC_nelect}")
         subprocess.run(["python", "new_plot_sc.py", "-n", f"{PZC_nelect}"])
-
-
-# Testing done, working!
-class cell_geo_opt:
-    def __init__(self):
-        pass
-
-    def scale_kpts(self, init_atoms, tmp_atoms, opt_levels, init_kpts):
-        cell = init_atoms.get_cell()
-        tmp_cell = tmp_atoms.get_cell()
-
-        # Scaling kpoints according to the cell size
-        kpts = [1,1,1]
-        for j in range(len(kpts)):
-            kpts[j] = int((init_kpts[j]*cell[j][j])/tmp_cell[j][j])
-            if kpts[j]%2==0:
-                kpts[j]+=1
-            if kpts[j]==0:
-                kpts[j]=1
-
-        # Scaling kpoints according to level
-        levels = opt_levels.keys()
-        count=list(levels)[-1]
-        for level in levels:
-            level_settings = opt_levels[level]
-            level_kpts = [int(kpts[0]/count), int(kpts[1]/count), int(kpts[2]/count)]
-            level_kpts = [1 if x == 0 else x for x in level_kpts]
-            level_settings["kpts"] = level_kpts
-            count-=1
-        
-        return opt_levels
-
-    def perform_file_operations(self, step, opt_levels):
-        levels = opt_levels.keys()
-        for level in levels:
-            shutil.copyfile(f"opt{level}.OUTCAR", f"{step}/opt{level}.OUTCAR")
-            os.remove(f"opt{level}.OUTCAR")
-            os.remove(f"opt{level}.vasp")
-            os.remove(f"opt{level}.xml")
-        shutil.copyfile("CONTCAR", f"{step}/CONTCAR")
-
-    """ Beneficial if there is huge change in volume of the system observed 
-        in equation of state analysis using either cell_opt or axis_opt.
-        Only kpoints are scaled in opt_levels. Other settings are untouched.
-        This is an alternative for ISIF=3"""
-    def run(self, init_atoms, opt_cell_atoms, n, opt_levels, init_kpts, restart=None):
-        cell = init_atoms.get_cell()
-        opt_cell = opt_cell_atoms.get_cell()
-
-        x = np.linspace(cell[0][0], opt_cell[0][0], num=n+1)
-        y = np.linspace(cell[1][1], opt_cell[1][1], num=n+1)
-        z = np.linspace(cell[2][2], opt_cell[2][2], num=n+1)
-        x = x[1:]
-        y = y[1:]
-        z = z[1:]
-        tmp_atoms = init_atoms.copy()
-
-        if restart==None or restart==False:
-            for i in range(x.size):
-                try:
-                    os.mkdir(f"{i+1}")
-                except FileExistsError:
-                    pass
-                tmp_atoms.set_cell([x[i], y[i], z[i]])
-                tmp_atoms.center()
-                
-                opt_levels = self.scale_kpts(init_atoms, tmp_atoms, opt_levels, init_kpts)
-
-                geo_opt(tmp_atoms, mode="vasp", opt_levels=opt_levels)
-
-                self.perform_file_operations(i+1, opt_levels)
-
-                tmp_atoms = read("CONTCAR")
-            return tmp_atoms
-            
-        if restart==True:
-            cwd = os.getcwd()
-            last_step = 0
-            for step in range(n):
-                if os.path.exists(cwd + f"/{step+1}") and os.listdir(cwd + f"/{step+1}")!=[]:
-                    last_step = step+1
-                else:
-                    break
-            
-            levels = opt_levels.keys()
-            largest_level = max(levels)
-            last_level = 0
-            for level in levels:
-                if os.path.exists(cwd + f"/opt{level}.OUTCAR"):
-                    last_level = level
-                else:
-                    break
-
-            if last_level==0:
-                tmp_atoms = read(cwd+f"/{last_step}/opt{level}.OUTCAR", index=-1)
-            elif last_level!=0 and last_level!=largest_level:
-                try:
-                    os.mkdir(f"{last_step+1}")
-                except FileExistsError:
-                    pass
-                tmp_atoms = read(cwd+f"/opt{last_level}.OUTCAR", index=-1)
-                opt_levels = self.scale_kpts(init_atoms, tmp_atoms, opt_levels, init_kpts)
-                tmp_opt_levels = opt_levels.copy()
-                tmp_opt_levels = list(opt_levels.items())
-                tmp_opt_levels = dict(tmp_opt_levels[last_level:])
-            
-                geo_opt(tmp_atoms, mode="vasp", opt_levels=tmp_opt_levels)
-
-                self.perform_file_operations(last_step+1, opt_levels)
-
-                tmp_atoms = read("CONTCAR")
-
-                last_step+=1
-
-            for i in range(last_step, x.size,1):
-                try:
-                    os.mkdir(f"{i+1}")
-                except FileExistsError:
-                    pass
-                tmp_atoms.set_cell([x[i], y[i], z[i]])
-                tmp_atoms.center()
-                
-                opt_levels = self.scale_kpts(init_atoms, tmp_atoms, opt_levels, init_kpts)
-                
-                geo_opt(tmp_atoms, mode="vasp", opt_levels=opt_levels)
-
-                self.perform_file_operations(i+1, opt_levels)
-
-                tmp_atoms = read("CONTCAR")
-            return tmp_atoms
+        os.rename(f"{PZC_nelect}", "PZC_calc")
 
 def dos(atoms, dense_k_points):
     calc = get_base_calc()
@@ -918,7 +778,6 @@ def analyse_GCBH(save_data=None, energy_operation=None, label=None):
     plt.ylabel(label)
     plt.savefig("analysis_vertical.png", bbox_inches="tight")
 
-# Testing done, working!
 def get_neighbor_list(atoms):
     nat_cut = natural_cutoffs(atoms, mult=1)
     nl = NeighborList(nat_cut, self_interaction=False, bothways=True)
@@ -940,7 +799,6 @@ def get_neighbor_list(atoms):
         indices, offsets = nl.get_neighbors(i)
         f.write(str(i) + " " + str(len(indices)) + "\n")
 
-# Testing done, working!
 def check_run_completion(location, output="OUTCAR"):
     cwd = os.getcwd()
     os.chdir(location)
@@ -984,7 +842,6 @@ def get_selective_dynamics(file_name, index):
     elif "F" in line:
         return False
 
-# Testing done, working!
 def create_sigma3_gb(n, top_layers, bottom_layers):
     top_layers = top_layers*(n,1,1) # Repeating the layers.
     for i in range(0,n*16,16):
@@ -1015,13 +872,11 @@ def create_sigma3_gb(n, top_layers, bottom_layers):
 class slide_sigma3_gb:
     def __init__(self, n_steps):
         self.n_steps = n_steps
-
-    # Testing done, working!
+ 
     def neighbor_distance(self, atoms, index, neighbor_position):
         dist = ((atoms[index].x - neighbor_position[0])**2 + (atoms[index].y - neighbor_position[1])**2 + (atoms[index].z - neighbor_position[2])**2)**(1/2)
         return dist
-
-    # Testing done, working!
+  
     def structure_corrections(self, atoms, theta, disp, scheme=None, n=None):
         cell = atoms.get_cell()
         atoms = pbc_correction(atoms)
@@ -1086,7 +941,6 @@ class slide_sigma3_gb:
             atoms = self.structure_corrections(atoms, theta, disp, scheme=scheme, n=n)
             return atoms
     
-    # Testing done, working!
     def run_serial(self, atoms, opt_levels, disp, theta, scheme=None, n=None, restart=None):
         calc = get_base_calc()
         set_vasp_key(calc, 'encut', 300)
@@ -1200,7 +1054,7 @@ class slide_sigma3_gb:
                 tmp_atoms = self.slide(tmp_atoms, theta, disp, scheme=scheme, n=n)
             os.chdir(cwd)
 
-    # Testing done, working! However, restart option not coded.
+    # Restart option not coded!
     def run_parallel(self, atoms, disp, theta, scheme=None, n=None, restart=None, largest_level=None):
         cwd = os.getcwd()
         try:
@@ -1235,7 +1089,6 @@ class slide_sigma3_gb:
                     os.chdir("../")
         os.chdir(cwd)
     
-    # Testing done, working!
     def get_output_Trajectory(self, atoms, theta, calc_type=None):
         cwd = os.getcwd()
         os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
@@ -1306,8 +1159,7 @@ class slide_sigma3_gb:
                 F = np.append(F, np.mean(force_list))
             os.chdir(cwd)
             return F
-    
-    # Testing done, working!
+     
     # Layer counting starts from 0. The grain boundary is 10th and 11th layers.
     def get_layer_movement(self, n, theta, nth_layer=None, index=None):
         cwd = os.getcwd()
@@ -1413,33 +1265,6 @@ class intercalate_Li:
         atoms = self.structure_check(atoms)
         return atoms
 
-
-# # Testing done, working for n=1!
-# def symmetrize_sigma3_gb(atoms, layer, n):    # For surface charging, n is the number of fixed layers.
-#     cell = atoms.get_cell()
-#     layer_size = layer.get_cell()[1][1]
-#     y_size = cell[1][1]
-#     for i in range(n):
-#         for atom in atoms:
-#             atom.y = atom.y + layer_size
-#         y_size = y_size + layer_size
-#         atoms.set_cell([cell[0][0], y_size, cell[2][2]])
-#         atoms = atoms + layer
-#     tmp_atoms = atoms.copy()
-#     tmp_cell = atoms.get_cell()
-#     for atom in tmp_atoms:
-#         if atom.y > n*layer_size:
-#             atom.y = n*layer_size - atom.y
-#     del tmp_atoms[[atom.index for atom in tmp_atoms if atom.y < n*layer_size and atom.y > 0]]
-#     new_atoms = atoms + tmp_atoms
-#     y_total = tmp_cell[1][1] + cell[1][1]
-#     new_atoms.set_cell([cell[0][0], y_total, cell[2][2]])
-#     new_atoms.center()
-#     c = FixAtoms(indices=[atom.index for atom in new_atoms if atom.y>cell[1][1] and atom.y<(cell[1][1]+layer_size)])
-#     new_atoms.set_constraint(c)
-#     new_atoms.center(vacuum = 15, axis = (1))
-#     return new_atoms
-
 def symmetrize_Si100_surface(atoms, n_fixed_layers=4, n_delete_layers=None, vacuum=15):
     cell = atoms.get_cell()
     b = cell[1,1]
@@ -1489,7 +1314,6 @@ def symmetrize_Si100_surface(atoms, n_fixed_layers=4, n_delete_layers=None, vacu
 
     return atoms
 
-# Testing done, working!
 def cure_Si_surface_with_H(atoms, upper=None):
     nat_cut = natural_cutoffs(atoms, mult=1)
     nl = NeighborList(nat_cut, self_interaction=False, bothways=True)
@@ -1514,7 +1338,6 @@ def cure_Si_surface_with_H(atoms, upper=None):
                 atoms.append(H_atom_2)
     return atoms
 
-# Testing done, working!
 def get_plot_settings(fig, x_label=None, y_label=None, fig_name=None, legend_location="upper left", show=None):
     ax = fig.gca()
     for axis in ['top', 'bottom', 'left', 'right']:
@@ -1535,7 +1358,6 @@ def get_plot_settings(fig, x_label=None, y_label=None, fig_name=None, legend_loc
 
 """LAMMPS related codes"""
 
-# Testing done, working!
 def fixed_layer_coord(atoms, n):    # For LAMMPS.
     cell = atoms.get_cell()
     layer_size = (atoms.get_cell()[0][0])/(2*n)
@@ -1545,7 +1367,6 @@ def fixed_layer_coord(atoms, n):    # For LAMMPS.
     xhi2 = layer_size*(n+int(n/2)+1)
     return [xlo1, xhi1, xlo2, xhi2]
 
-# Testing done, working!
 def edit_lammps_script(file_path, x, Tdamp, dt, N):
     with open(file_path, 'r') as f:
         content = f.read()
