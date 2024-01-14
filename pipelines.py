@@ -133,7 +133,51 @@ def axis_opt(atoms, kpts, axis, npoints=5, eps=0.04, addnl_settings=None):
 
 
 # todo: Program restart option!
-def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
+def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
+    def opt_by_vasp(calc, opt_levels, level):
+        level_settings = opt_levels[level]
+        # default settings when using built-in optimizer
+        set_vasp_key(calc, 'ibrion', 2)
+        set_vasp_key(calc, 'ediffg', -1e-2)
+        set_vasp_key(calc, 'nsw', 500)
+        set_vasp_key(calc, 'nelm', 500)
+        # user-supplied overrides
+        for key in level_settings.keys():
+            set_vasp_key(calc, key, level_settings[key])
+
+        atoms = read("CONTCAR")
+        atoms.calc = calc
+        atoms.get_potential_energy()
+        calc = get_base_calc()
+        atoms = read("OUTCAR", index=-1)
+        shutil.copyfile("CONTCAR", f"opt{level}.vasp")
+        shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
+        shutil.copyfile("vasp.out", f"opt{level}.out")
+        return atoms
+    
+    def opt_by_ase(calc, opt_levels, level):
+        # default settings when using ase optimizer
+        set_vasp_key(calc, 'ibrion', -1)
+        set_vasp_key(calc, 'nsw', 0)
+        # user-supplied overrides
+        level_settings = opt_levels[level]
+        for key in level_settings.keys():
+            if key in ['nsw', 'ibrion', 'ediffg']:
+                continue
+            set_vasp_key(calc, key, level_settings[key])
+
+        atoms = read("CONTCAR")
+        atoms.calc = calc
+        opt = BFGS(atoms,
+                    trajectory = f"opt{level}.traj",
+                    logfile = f"opt{level}.log")
+        opt.run(fmax=fmax)
+        calc = get_base_calc()
+        shutil.copyfile("CONTCAR", f"opt{level}.vasp")
+        shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
+        shutil.copyfile("vasp.out", f"opt{level}.out")
+        return atoms
+    
     calc = get_base_calc()
     if not opt_levels:
         # for bulks.
@@ -145,53 +189,27 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, fmax=0.02):
         }
 
     levels = opt_levels.keys()
-    if mode == 'vasp':
+    if mode == 'vasp' and restart != True:
         write("CONTCAR", atoms)
         for level in levels:
-            level_settings = opt_levels[level]
-            # default settings when using built-in optimizer
-            set_vasp_key(calc, 'ibrion', 2)
-            set_vasp_key(calc, 'ediffg', -1e-2)
-            set_vasp_key(calc, 'nsw', 500)
-            set_vasp_key(calc, 'nelm', 500)
-            # user-supplied overrides
-            for key in level_settings.keys():
-                set_vasp_key(calc, key, level_settings[key])
-
-            atoms_tmp = read("CONTCAR")
-            atoms_tmp.calc = calc
-            atoms_tmp.get_potential_energy()
-            calc = get_base_calc()
-            atoms_tmp = read("OUTCAR", index=-1)
-            shutil.copyfile("CONTCAR", f"opt{level}.vasp")
-            shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
-            shutil.copyfile("vasp.out", f"opt{level}.out")
-    elif mode == 'ase':
-        atoms_tmp = atoms.copy()
-        from ase.optimize import BFGS
-        # this atoms_tmp is updated when optimizer runs
+            if mode=="vasp":
+                atoms = opt_by_vasp(calc, opt_levels, level)
+            elif mode=="ase":
+                atoms = opt_by_ase(calc, opt_levels, level)
+    
+    if restart == True:
+        last_level = 0
         for level in levels:
-            # default settings when using ase optimizer
-            set_vasp_key(calc, 'ibrion', -1)
-            set_vasp_key(calc, 'nsw', 0)
-            # user-supplied overrides
-            level_settings = opt_levels[level]
-            for key in level_settings.keys():
-                if key in ['nsw', 'ibrion', 'ediffg']:
-                    continue
-                set_vasp_key(calc, key, level_settings[key])
-
-            atoms_tmp.calc = calc
-            opt = BFGS(atoms_tmp,
-                       trajectory = f"opt{level}.traj",
-                       logfile = f"opt{level}.log")
-            opt.run(fmax=fmax)
-            calc.reset()
-            shutil.copyfile("CONTCAR", f"opt{level}.vasp")
-            shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
-            shutil.copyfile("vasp.out", f"opt{level}.out")
+            if os.path.exists(f"opt{level}.out"):
+                last_level = level
+        levels = list(levels)
+        for level in range(last_level+1,levels[-1]+1):
+            if mode=="vasp":
+                atoms = opt_by_vasp(calc, opt_levels, level)
+            elif mode=="ase":
+                atoms = opt_by_ase(calc, opt_levels, level)
             
-    return atoms_tmp
+    return atoms
 
 def bader(atoms, kpts, valence_electrons, addnl_settings=None):
     def run_vasp(atoms):
