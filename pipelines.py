@@ -607,19 +607,18 @@ def pbc_correction(atoms):
             atom.z = atom.z - cell[2][2]
     return atoms
 
-def frequency(atoms, mode="vasp", scheme="serial", settings=None):
+def frequency(atoms, kpts, mode="vasp", scheme="serial", addnl_settings=None):
     calc = get_base_calc()
-    if settings["kpts"]==None:
-        settings["kpts"]=atoms.info["kpts"]
-    keys = settings.keys()
+    keys = addnl_settings.keys()
     for key in keys:
-        set_vasp_key(calc, key, settings[key])
+        set_vasp_key(calc, key, addnl_settings[key])
 
     if mode == "vasp":
         # avoid this on large structures
         # ncore/npar unusable, leads to kpoint errors
         # isym must be switched off, leading to large memory usage
         calc.set(
+            kpts=kpts,
             ibrion=5,
             potim=0.015,
             nsw=500,  # as many dofs as needed
@@ -632,7 +631,7 @@ def frequency(atoms, mode="vasp", scheme="serial", settings=None):
         atoms.get_potential_energy()
         # todo: parse OUTCAR frequencies and modes
     elif mode == "ase":
-        calc.set(lwave=True, isym=-1)  # according to michael
+        calc.set(kpts=kpts, lwave=True, isym=-1)  # according to michael
         atoms.calc = calc
         constr = atoms.constraints
         constr = [c for c in constr if isinstance(c, FixAtoms)]
