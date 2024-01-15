@@ -607,7 +607,7 @@ def pbc_correction(atoms):
             atom.z = atom.z - cell[2][2]
     return atoms
 
-def frequency(atoms, kpts, mode="vasp", scheme="serial", addnl_settings=None):
+def frequency(atoms, kpts, mode="vasp", addnl_settings=None):
     calc = get_base_calc()
     keys = addnl_settings.keys()
     for key in keys:
@@ -626,10 +626,10 @@ def frequency(atoms, kpts, mode="vasp", scheme="serial", addnl_settings=None):
             npar=None,
             isym=0,
         )  # turn off symmetry
-
         atoms.calc = calc
         atoms.get_potential_energy()
         # todo: parse OUTCAR frequencies and modes
+
     elif mode == "ase":
         calc.set(kpts=kpts, lwave=True, isym=-1)  # according to michael
         atoms.calc = calc
@@ -639,19 +639,10 @@ def frequency(atoms, kpts, mode="vasp", scheme="serial", addnl_settings=None):
             vib_indices = [a.index for a in atoms if a.index not in constr[0].index]
         elif constr==[]:
             vib_indices = [a.index for a in atoms]
-        if scheme=="serial":
-            vib = Vibrations(atoms, indices=vib_indices)
-            vib.run()  # this will save json files
-            vib.summary(log="vibrations.txt")
-            return vib.get_energies()
-        elif scheme=="parallel":
-            for index in vib_indices:
-                try:
-                    os.mkdir(f"{index}")
-                except FileExistsError:
-                    pass
-            os.chdir(f"{index}")
-            # todo: complete parallel scheme
+        vib = Vibrations(atoms, indices=vib_indices)
+        vib.run()  # this will save json files
+        vib.summary(log="vibrations.txt")
+        return vib.get_energies()
 
 class surface_charging:
     def __init__(self) -> None:
