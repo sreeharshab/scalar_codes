@@ -132,8 +132,12 @@ def axis_opt(atoms, kpts, axis, npoints=5, eps=0.04, addnl_settings=None):
     return atoms
 
 
-# todo: Program restart option!
 def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
+    def save_files(level):
+        shutil.copyfile("CONTCAR", f"opt{level}.vasp")
+        shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
+        shutil.copyfile("vasp.out", f"opt{level}.out")
+    
     def opt_by_vasp(calc, opt_levels, level):
         level_settings = opt_levels[level]
         # default settings when using built-in optimizer
@@ -150,9 +154,7 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
         atoms.get_potential_energy()
         calc = get_base_calc()
         atoms = read("OUTCAR", index=-1)
-        shutil.copyfile("CONTCAR", f"opt{level}.vasp")
-        shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
-        shutil.copyfile("vasp.out", f"opt{level}.out")
+        save_files(level)
         return atoms
     
     def opt_by_ase(calc, opt_levels, level):
@@ -173,9 +175,7 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
                     logfile = f"opt{level}.log")
         opt.run(fmax=fmax)
         calc = get_base_calc()
-        shutil.copyfile("CONTCAR", f"opt{level}.vasp")
-        shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
-        shutil.copyfile("vasp.out", f"opt{level}.out")
+        save_files(level)
         return atoms
     
     calc = get_base_calc()
@@ -187,9 +187,9 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
             2: {"kpts": [5, 5, 5]},
             3: {"kpts": [7, 7, 7]},
         }
-
     levels = opt_levels.keys()
-    if mode == 'vasp' and restart != True:
+
+    if restart != True:
         write("CONTCAR", atoms)
         for level in levels:
             if mode=="vasp":
@@ -203,6 +203,10 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
             if os.path.exists(f"opt{level}.out"):
                 last_level = level
         levels = list(levels)
+        # if a new calc is started with restart=True
+        if last_level==0:
+            last_level = levels[0]-1
+            write("CONTCAR", atoms)
         for level in range(last_level+1,levels[-1]+1):
             if mode=="vasp":
                 atoms = opt_by_vasp(calc, opt_levels, level)
@@ -681,7 +685,6 @@ class surface_charging:
 
         # Running a neutral solvation (PZC) calculation.
         PZC_calc = False
-        last_level = len(opt_levels)
         if os.path.exists(f"./POSCAR_solvated"):
             PZC_calc = True
         if PZC_calc==False:
@@ -690,7 +693,7 @@ class surface_charging:
             except FileExistsError:
                 pass
             os.chdir("PZC_calc")
-            geo_opt(atoms, mode="vasp", opt_levels=opt_levels)
+            geo_opt(atoms, mode="vasp", opt_levels=opt_levels, restart=True)
             shutil.copyfile("CONTCAR", "../POSCAR_solvated")
             os.chdir("../")
         
