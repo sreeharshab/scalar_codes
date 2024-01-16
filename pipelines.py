@@ -687,9 +687,8 @@ class surface_charging:
             shutil.copyfile("CONTCAR", "../POSCAR_solvated")
             os.chdir("../")
         
-        PZC_nelect = self.get_PZC_nelect()
-        
         if n_nelect!=None and width_nelect!=None:
+            PZC_nelect = self.get_PZC_nelect()
             n_nelect = int(n_nelect/2)
             nelect = np.arange(PZC_nelect-n_nelect*width_nelect, PZC_nelect+n_nelect*width_nelect+width_nelect, width_nelect)
             nelect = np.delete(nelect,n_nelect) # Excluding PZC_nelect.
