@@ -666,8 +666,9 @@ class surface_charging:
     Example:
     If PZC_nelect = 40, n_nelect = 4 and width_nelect = 0.25, the values of nelect will be [39.50, 39.75, 40.25, 40.50].
     **kwargs are used to get the arguments of the symmetrize function.
+    Use custom_nelect when you know PZC_nelect. Leave n_nelect=None and width_nelect=None when custom_nelect is used.
     """
-    def run(self, atoms, opt_levels, n_nelect, width_nelect, symmetrize_function=None, **kwargs):
+    def run(self, atoms, opt_levels, n_nelect=None, width_nelect=None, custom_nelect=None, symmetrize_function=None, **kwargs):
         if symmetrize_function!=None:
             atoms = symmetrize_function(atoms, **kwargs)
             write("POSCAR_sym", atoms)
@@ -688,9 +689,12 @@ class surface_charging:
         
         PZC_nelect = self.get_PZC_nelect()
         
-        n_nelect = int(n_nelect/2)
-        nelect = np.arange(PZC_nelect-n_nelect*width_nelect, PZC_nelect+n_nelect*width_nelect+width_nelect, width_nelect)
-        nelect = np.delete(nelect,n_nelect) # Excluding PZC_nelect.
+        if n_nelect!=None and width_nelect!=None:
+            n_nelect = int(n_nelect/2)
+            nelect = np.arange(PZC_nelect-n_nelect*width_nelect, PZC_nelect+n_nelect*width_nelect+width_nelect, width_nelect)
+            nelect = np.delete(nelect,n_nelect) # Excluding PZC_nelect.
+        elif custom_nelect!=None:
+            nelect = custom_nelect
         
         for i in nelect:
             try:
