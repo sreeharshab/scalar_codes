@@ -687,7 +687,7 @@ def pbc_correction(atoms):
             atom.z = atom.z - cell[2][2]
     return atoms
 
-def frequency(atoms, kpts, mode="vasp", addnl_settings=None):
+def frequency(atoms, kpts, mode="vasp", vib_indices=None, addnl_settings=None):
     calc = get_base_calc()
     keys = addnl_settings.keys()
     for key in keys:
@@ -713,12 +713,15 @@ def frequency(atoms, kpts, mode="vasp", addnl_settings=None):
     elif mode == "ase":
         calc.set(kpts=kpts, lwave=True, isym=-1)  # according to michael
         atoms.calc = calc
-        constr = atoms.constraints
-        constr = [c for c in constr if isinstance(c, FixAtoms)]
-        if constr!=[]:
-            vib_indices = [a.index for a in atoms if a.index not in constr[0].index]
-        elif constr==[]:
-            vib_indices = [a.index for a in atoms]
+        if vib_indices==None:
+            constr = atoms.constraints
+            constr = [c for c in constr if isinstance(c, FixAtoms)]
+            if constr!=[]:
+                vib_indices = [a.index for a in atoms if a.index not in constr[0].index]
+            elif constr==[]:
+                vib_indices = [a.index for a in atoms]
+        elif vib_indices!=None:
+            vib_indices = vib_indices
         vib = Vibrations(atoms, indices=vib_indices)
         vib.run()  # this will save json files
         vib.summary(log="vibrations.txt")
