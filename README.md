@@ -6,7 +6,7 @@ git clone https://github.com/sreeharshab/scalar_codes.git
 ```
 After successful cloning of the repo, open your `.bashrc` and insert this line:
 ```
-export PYTHONPATH=/path_to_home_directory/scalar_codes
+export PYTHONPATH=/path_to_home_directory/scalar_codes:$PYTHONPATH
 ```
 Exit your `.bashrc` and source it as follows:
 ```
@@ -22,11 +22,11 @@ All of the code is available in pipelines.py. The following are the available fe
 1. cell_opt: Optimizes the size of the simulation cell.
 2. axis_opt: Optimizes the size of the required axis of the simulation cell.
 3. geo_opt: Performs geometry optimization on the system using inbuilt VASP optimizers (using the IBRION tag) or ASE optimizers.
-4. bader: Performs bader charge analysis on the system. You can view the charges in ACF.dat file or using ase gui and choosing the Initial Charges label in the view tab.
-5. COHP: Performs COHP analysis on the system. Presently only suitable for systems containing only Si, O, Al and Li. Feel free to understand and edit the code according to your needs. The output is saved as cohp-1.png.
+4. bader: Performs bader charge analysis on the system. Charges can be viewed in ACF.dat file or using ase gui and choosing the Initial Charges label in the view tab.
+5. COHP: Performs COHP analysis on the system. The output is saved as cohp-1.png.
 6. NEB: Performs Nudged Elastic Band calculation to obtain transition state between initial and final images. Intermediate images can be generated using either linear interpolation or [Opt'n Path](http://forge.cbp.ens-lyon.fr/redmine/projects/optnpath/wiki) program. NEB can be run using [ASE](https://wiki.fysik.dtu.dk/ase/) or [VTST](https://theory.cm.utexas.edu/vtsttools/) scripts.
 7. pbc_correction: Corrects atom's coordinates if they are out of the simulation cell (wrapping operation). Note: Only works for orthogonal cells!
-8. frequency: Performs vibrational analysis on the system using VASP or ASE (parallelization is good using ASE).
+8. frequency: Performs vibrational analysis on the system using VASP or ASE.
 9. surface_charging: Performs surface charging calculation using [VASPsol](https://github.com/henniggroup/VASPsol).
 10. dos: Performs a DOS calculation. The code for visualizing DOS will be implemented soon.
 11. analyse_GCBH: Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using gcbh.py.

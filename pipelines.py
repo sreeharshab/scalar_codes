@@ -84,6 +84,21 @@ def set_vasp_key(calc, key, value):
 
 """Yantao's code"""
 def cell_opt(atoms, kpts, npoints=5, eps=0.04, addnl_settings=None):
+    """Optimizes the size of the simulation cell.
+
+    :param atoms: Atoms to be optimized
+    :type atoms: Atoms object
+    :param kpts: KPOINTS used for the calculation
+    :type kpts: list
+    :param npoints: Number of optimization points for the calculation, defaults to 5
+    :type npoints: int, optional
+    :param eps: Variation in volume, defaults to 0.04
+    :type eps: float, optional
+    :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
+    :type addnl_settings: dict, optional
+    :return: Optimized atoms
+    :rtype: Atoms object
+    """
     calc = get_base_calc()
 
     calc.set(ibrion=-1, nsw=0, kpts=kpts)
@@ -104,7 +119,23 @@ def cell_opt(atoms, kpts, npoints=5, eps=0.04, addnl_settings=None):
 
 
 def axis_opt(atoms, kpts, axis, npoints=5, eps=0.04, addnl_settings=None):
-    """relax one vector of the cell"""
+    """Optimizes the size of the required axis of the simulation cell.
+
+    :param atoms: Atoms to be optimized
+    :type atoms: Atoms object
+    :param kpts: KPOINTS used for the calculation
+    :type kpts: list
+    :param axis: The axis to be optimized
+    :type axis: int
+    :param npoints: Number of optimization points for the calculation, defaults to 5
+    :type npoints: int, optional
+    :param eps: Variation in volume, defaults to 0.04
+    :type eps: float, optional
+    :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
+    :type addnl_settings: dict, optional
+    :return: Optimized atoms
+    :rtype: Atoms object
+    """
     ens = np.zeros(npoints)
     vols = np.zeros(npoints)
 
@@ -133,6 +164,24 @@ def axis_opt(atoms, kpts, axis, npoints=5, eps=0.04, addnl_settings=None):
 
 
 def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
+    """Performs geometry optimization on the system using inbuilt VASP optimizers (using the IBRION tag) or ASE optimizers.
+
+    :param atoms: Atoms to be geometrically optimized
+    :type atoms: Atoms object
+    :param mode: Type of optimizer to be used, `"vasp"` for IBRION=2 and `"ase"` for BFGS, defaults to "vasp"
+    :type mode: str, optional
+    :param opt_levels: Dictionary of dictionaries, each dictionary containing settings for each level of calculation, defaults to 
+        ``{
+        1:{"kpts":[3,3,3]}, 
+        2:{"kpts":[5,5,5]}, 
+        3:{"kpts":[7,7,7]}
+        }``
+    :type opt_levels: dict, optional
+    :param restart: Restarting a calculation if `restart=True`, defaults to None
+    :type restart: bool, optional
+    :param fmax: Maximum force on optimized atoms, defaults to 0.02
+    :type fmax: float, optional
+    """
     def save_files(level):
         shutil.copyfile("CONTCAR", f"opt{level}.vasp")
         shutil.copyfile("OUTCAR", f"opt{level}.OUTCAR")
@@ -215,6 +264,17 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
     return atoms
 
 def bader(atoms, kpts, valence_electrons, addnl_settings=None):
+    """Performs bader charge analysis on the system. Charges can be viewed in ACF.dat file or using ase gui and choosing the Initial Charges label in the view tab.
+
+    :param atoms: Atoms for which charge should be determined
+    :type atoms: Atoms object
+    :param kpts: KPOINTS used for the calculation
+    :type kpts: list
+    :param valence_electrons: Dictionary containing the symbol of atoms as key and the corresponding valence electrons from POTCAR as value
+    :type valence_electrons: dict
+    :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
+    :type addnl_settings: dict, optional
+    """
     def run_vasp(atoms):
         calc = get_base_calc()
         
@@ -271,7 +331,18 @@ def bader(atoms, kpts, valence_electrons, addnl_settings=None):
 
 
 class COHP:
+    """Performs COHP analysis on the system. The output is saved as cohp-1.png.
+    """
     def __init__(self, atoms, bonds, lobsterin_template=None):
+        """Initializes the COHP class.
+
+        :param atoms: Atoms on which COHP analysis is performed.
+        :type atoms: Atoms object
+        :param bonds: List of lists, where each list contains the indexes of two bonding atoms
+        :type bonds: list
+        :param lobsterin_template: Path of file which contains lobster template. If no path is given, the default template is used, defaults to None
+        :type lobsterin_template: str, optional
+        """
         self.atoms = atoms
         self.bonds = bonds
 
@@ -289,6 +360,15 @@ class COHP:
         self.lobsterin_template = template
 
     def run_vasp(self, kpts, valence_electrons, addnl_settings=None):
+        """_summary_
+
+        :param kpts: _description_
+        :type kpts: _type_
+        :param valence_electrons: _description_
+        :type valence_electrons: _type_
+        :param addnl_settings: _description_, defaults to None
+        :type addnl_settings: _type_, optional
+        """
         atoms = self.atoms
         calc = get_base_calc()
         calc.set(ibrion=-1, nsw=0, isym=-1, prec="Accurate", kpts=kpts, lwave=True, lcharg=True)
