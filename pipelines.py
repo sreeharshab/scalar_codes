@@ -686,7 +686,7 @@ class frequency:
             vib_indices = [a.index for a in atoms]
         return vib_indices
     
-    def run(self, kpts, mode="ase", scheme=None, addnl_settings=None):
+    def run(self, kpts=None, mode="ase", scheme=None, addnl_settings=None):
         atoms = self.atoms
         calc = get_base_calc()
         keys = addnl_settings.keys()
