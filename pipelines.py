@@ -669,13 +669,15 @@ class Dimer:
 
 class frequency:
     def __init__(self, atoms, vib_indices=None):
+        self.atoms = atoms
         if vib_indices==None:
             vib_indices = self.get_vib_indices(atoms)
         elif vib_indices!=None:
             vib_indices = vib_indices
         self.vib_indices = vib_indices
 
-    def get_vib_indices(self, atoms):
+    def get_vib_indices(self):
+        atoms = self.atoms
         constr = atoms.constraints
         constr = [c for c in constr if isinstance(c, FixAtoms)]
         if constr!=[]:
@@ -684,7 +686,8 @@ class frequency:
             vib_indices = [a.index for a in atoms]
         return vib_indices
     
-    def run(self, atoms, kpts, mode="ase", scheme=None, addnl_settings=None):
+    def run(self, kpts, mode="ase", scheme=None, addnl_settings=None):
+        atoms = self.atoms
         calc = get_base_calc()
         keys = addnl_settings.keys()
         for key in keys:
@@ -727,7 +730,7 @@ class frequency:
                     os.chdir("../")
     
     # todo: parse OUTCAR frequencies and modes for mode="vasp"
-    def analysis(self, atoms, potentialenergy, temperature, copy_json_files=None):
+    def analysis(self, potentialenergy, temperature, copy_json_files=None):
         """Note: This method only works for `mode="ase"`.
 
         :param atoms: _description_
@@ -739,6 +742,7 @@ class frequency:
         :param copy_json_files: True only if `scheme="parallel"`, defaults to None
         :type copy_json_files: bool, optional
         """
+        atoms = self.atoms
         vib_indices = self.vib_indices
         vib = Vibrations(atoms, indices=vib_indices)
         if copy_json_files==True:
