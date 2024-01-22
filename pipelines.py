@@ -20,8 +20,10 @@ from ase.eos import EquationOfState as EOS
 from ase.visualize import view
 from ase.constraints import FixAtoms
 from ase.vibrations import Vibrations
+from ase.thermochemistry import HarmonicThermo
 import pandas as pd
 import re
+from distutils.dir_util import copy_tree
 
 logo = r""" ____  _            _ _                 
 |  _ \(_)_ __   ___| (_)_ __   ___  ___ 
@@ -82,7 +84,6 @@ def set_vasp_key(calc, key, value):
     if key in calc.input_params.keys():
         calc.input_params[key] = value
 
-"""Yantao's code"""
 def cell_opt(atoms, kpts, npoints=5, eps=0.04, addnl_settings=None):
     """Optimizes the size of the simulation cell.
 
@@ -395,12 +396,6 @@ class COHP:
 
     def run_lobster(self):
         lobster = os.getenv("LOBSTER")
-
-        # lobster_env = os.environ.copy()
-        # typically we avoid using OpenMP, this is an exception
-        # lobster_env["OMP_NUM_THREADS"] = os.getenv("NSLOTS")
-
-        # subprocess.run([lobster], capture_output=True, env=lobster_env)
         subprocess.run([lobster], capture_output=True)
 
     def plot(self, cohp_xlim, cohp_ylim, icohp_xlim, icohp_ylim):
@@ -672,60 +667,100 @@ class Dimer:
     def run(self):
         self.atoms.get_potential_energy()
 
-"""End of Yantao's code"""
-
-def pbc_correction(atoms):
-    cell = atoms.get_cell()
-    for atom in atoms:
-        if atom.y < 0:
-            atom.y = atom.y + cell[1][1]
-        if atom.y > cell[1][1]:
-            atom.y = atom.y - cell[1][1]
-        if atom.z < 0:
-            atom.z = atom.z + cell[2][2]
-        if atom.z > cell[2][2]:
-            atom.z = atom.z - cell[2][2]
-    return atoms
-
-def frequency(atoms, kpts, mode="vasp", vib_indices=None, addnl_settings=None):
-    calc = get_base_calc()
-    keys = addnl_settings.keys()
-    for key in keys:
-        set_vasp_key(calc, key, addnl_settings[key])
-
-    if mode == "vasp":
-        # avoid this on large structures
-        # ncore/npar unusable, leads to kpoint errors
-        # isym must be switched off, leading to large memory usage
-        calc.set(
-            kpts=kpts,
-            ibrion=5,
-            potim=0.015,
-            nsw=500,  # as many dofs as needed
-            ncore=None,  # avoids error of 'changing kpoints'
-            npar=None,
-            isym=0,
-        )  # turn off symmetry
-        atoms.calc = calc
-        atoms.get_potential_energy()
-        # todo: parse OUTCAR frequencies and modes
-
-    elif mode == "ase":
-        calc.set(kpts=kpts, lwave=True, isym=-1)  # according to michael
-        atoms.calc = calc
+class frequency:
+    def __init__(self, atoms, vib_indices=None):
         if vib_indices==None:
-            constr = atoms.constraints
-            constr = [c for c in constr if isinstance(c, FixAtoms)]
-            if constr!=[]:
-                vib_indices = [a.index for a in atoms if a.index not in constr[0].index]
-            elif constr==[]:
-                vib_indices = [a.index for a in atoms]
+            vib_indices = self.get_vib_indices(atoms)
         elif vib_indices!=None:
             vib_indices = vib_indices
+        self.vib_indices = vib_indices
+
+    def get_vib_indices(self, atoms):
+        constr = atoms.constraints
+        constr = [c for c in constr if isinstance(c, FixAtoms)]
+        if constr!=[]:
+            vib_indices = [a.index for a in atoms if a.index not in constr[0].index]
+        elif constr==[]:
+            vib_indices = [a.index for a in atoms]
+        return vib_indices
+    
+    def run(self, atoms, kpts, mode="ase", scheme=None, addnl_settings=None):
+        calc = get_base_calc()
+        keys = addnl_settings.keys()
+        for key in keys:
+            set_vasp_key(calc, key, addnl_settings[key])
+
+        if mode == "vasp":
+            # avoid this on large structures, use ase instead
+            # ncore/npar unusable, leads to kpoint errors
+            # isym must be switched off, leading to large memory usage
+            calc.set(
+                kpts=kpts,
+                ibrion=5,
+                potim=0.015,
+                nsw=500,
+                ncore=None,
+                npar=None,
+                isym=0,
+            )
+            atoms.calc = calc
+            atoms.get_potential_energy()
+
+        elif mode == "ase":
+            calc.set(kpts=kpts, lwave=True, isym=-1)  # according to michael
+            atoms.calc = calc
+            vib_indices = self.vib_indices
+
+            if scheme == "serial":
+                vib = Vibrations(atoms, indices=vib_indices)
+                vib.run()  # this will save json files
+        
+            elif scheme == "parallel":
+                for indice in vib_indices:
+                    os.mkdir(f"{indice}")
+                    shutil.copyfile("./freq.py", f"./{indice}/freq.py")
+                    shutil.copyfile("./freq.sh", f"./{indice}/freq.sh")
+                    shutil.copyfile("./POSCAR", f"./{indice}/POSCAR")
+                    os.chdir(f"{indice}")
+                    subprocess.run(["sed", "-i", f"s/iii/{str(indice)}/g", "freq.py"])
+                    subprocess.run(["sbatch", "freq.sh"])
+                    os.chdir("../")
+    
+    # todo: parse OUTCAR frequencies and modes for mode="vasp"
+    def analysis(self, atoms, potentialenergy, temperature, copy_json_files=None):
+        """Note: This method only works for `mode="ase"`.
+
+        :param atoms: _description_
+        :type atoms: _type_
+        :param potentialenergy: _description_
+        :type potentialenergy: _type_
+        :param temperature: _description_
+        :type temperature: _type_
+        :param copy_json_files: True only if `scheme="parallel"`, defaults to None
+        :type copy_json_files: bool, optional
+        """
+        vib_indices = self.vib_indices
         vib = Vibrations(atoms, indices=vib_indices)
-        vib.run()  # this will save json files
+        if copy_json_files==True:
+            for indice in vib_indices:
+                os.chdir(f"./{indice}")
+                copy_tree("./vib", "../vib")
+                os.chdir("../")
+        vib.run()
         vib.summary(log="vibrations.txt")
-        return vib.get_energies()
+        thermo = HarmonicThermo(vib_energies = vib.get_energies(), potentialenergy = potentialenergy, ignore_imag_modes=True)
+        thermo.get_helmholtz_energy(temperature)
+    
+    def check_vib_files(self):
+        f = open("file_size.txt", "w")
+        vib_indices = self.vib_indices
+        for indice in vib_indices:
+            os.chdir(f"./{indice}/vib")
+            files = os.listdir()
+            for file in files:
+                f.write(str(indice) + "  " + str(os.path.getsize(file)) + "\n")
+            os.chdir("../../")
+
 
 class surface_charging:
     def __init__(self) -> None:

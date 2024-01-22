@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Bhimineni"
+  given-names: "Sree Harsha"
+  orcid: "https://orcid.org/0009-0008-2943-4570"
+- family-names: "Xia"
+  given-names: "Yantao"
+  orcid:
+title: "Scalar Codes"
+version:
+doi:
+date-released:
+url: "https://github.com/sreeharshab/scalar_codes"
