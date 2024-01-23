@@ -671,7 +671,7 @@ class frequency:
     def __init__(self, atoms, vib_indices=None):
         self.atoms = atoms
         if vib_indices==None:
-            vib_indices = self.get_vib_indices(atoms)
+            vib_indices = self.get_vib_indices()
         elif vib_indices!=None:
             vib_indices = vib_indices
         self.vib_indices = vib_indices
@@ -689,9 +689,10 @@ class frequency:
     def run(self, kpts=None, mode="ase", scheme=None, addnl_settings=None):
         atoms = self.atoms
         calc = get_base_calc()
-        keys = addnl_settings.keys()
-        for key in keys:
-            set_vasp_key(calc, key, addnl_settings[key])
+        if addnl_settings!=None:
+            keys = addnl_settings.keys()
+            for key in keys:
+                set_vasp_key(calc, key, addnl_settings[key])
 
         if mode == "vasp":
             # avoid this on large structures, use ase instead
