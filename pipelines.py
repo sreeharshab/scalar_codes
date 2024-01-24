@@ -753,7 +753,9 @@ class frequency:
                 os.chdir("../")
         vib.run()
         vib.summary(log="vibrations.txt")
-        thermo = HarmonicThermo(vib_energies = vib.get_energies(), potentialenergy = potentialenergy, ignore_imag_modes=True)
+        vib_energies = vib.get_energies()
+        vib_energies = np.array([i for i in vib_energies if i.imag==0])
+        thermo = HarmonicThermo(vib_energies = vib_energies, potentialenergy = potentialenergy)
         thermo.get_helmholtz_energy(temperature)
     
     def check_vib_files(self):
