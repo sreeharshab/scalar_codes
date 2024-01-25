@@ -255,7 +255,10 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
         # if a new calc is started with restart=True
         if last_level==0:
             last_level = levels[0]-1
-            write("CONTCAR", atoms)
+            if os.path.exists(f"CONTCAR"):
+                pass
+            else:
+                write("CONTCAR", atoms)
         for level in range(last_level+1,levels[-1]+1):
             if mode=="vasp":
                 atoms = opt_by_vasp(opt_levels, level)
