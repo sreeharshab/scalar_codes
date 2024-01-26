@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import numpy as np
 from numpy import arctan, sin, cos, tan, pi
+from statistics import mean
 from matplotlib import pyplot as plt
 from matplotlib import gridspec
 import ase
@@ -982,6 +983,41 @@ def get_selective_dynamics(file_name, index):
         return True
     elif "F" in line:
         return False
+
+class benchmark:
+    def __init__(self, cores):
+        self.cores = cores
+
+    def submit_jobs(self):
+        cores = self.cores
+        for core in cores:
+            os.mkdir(f"{core}")
+            shutil.copyfile("job.sh", f"{core}/job.sh")
+            shutil.copyfile("run.py", f"{core}/run.py")
+            shutil.copyfile("POSCAR", f"{core}/POSCAR")
+            os.chdir("./{core}")
+            subprocess.run(["sbatch", "job.sh"])
+            os.chdir("..")
+    
+    def get_benchmark(self, outcar_location="./"):
+        cores = self.cores
+        times = []
+        cwd = os.getcwd()
+        for core in cores:
+            os.chdir(f"./{core}")
+            os.chdir(f"{outcar_location}")
+            outcar_times = []
+            with open("OUTCAR", "r") as file:
+                for line in file:
+                    match = re.search(r"LOOP\+:\s+cpu time\s+([0-9]+\.[0-9]+)(?:\s+: real time [0-9]+\.[0-9]+)?", line)
+                    if match:
+                        outcar_times.append(float(match.group(1)))
+            times.append(mean(outcar_times))
+            os.chdir(cwd)
+        times = [(time/3600) for time in times]
+        fig = plt.figure(dpi = 200, figsize=(6,5))
+        plt.plot(cores, times, 'o-', color="black")
+        get_plot_settings(fig, x_label="Number of cores", y_label="Time per ionic step (hr)", fig_name="time.png")
 
 def create_sigma3_gb(n, top_layers, bottom_layers):
     top_layers = top_layers*(n,1,1) # Repeating the layers.
