@@ -845,16 +845,20 @@ class surface_charging:
         subprocess.run(["python", "new_plot_sc.py", "-n", f"{PZC_nelect}"])
         os.rename(f"{PZC_nelect}", "PZC_calc")
 
-def dos(atoms, dense_k_points):
+def dos(atoms, kpts, addnl_settings=None):
     calc = get_base_calc()
+    if addnl_settings!=None:
+        for key in addnl_settings.keys():
+            set_vasp_key(calc, key, addnl_settings[key])
     set_vasp_key(calc, 'ismear', -5)
-    set_vasp_key(calc, 'icharg', 11)
+    set_vasp_key(calc, 'icharg', 11)    # Obtain CHGCAR from single point calculation.
     set_vasp_key(calc, 'lorbit', 11)
     set_vasp_key(calc, 'nedos', 1000)   # It should be between 1000 to 3000 based on the accuracy required.
-    set_vasp_key(calc, 'kpts', dense_k_points)
+    set_vasp_key(calc, 'kpts', kpts)
     atoms.set_calculator(calc)
     atoms.get_potential_energy()
     return atoms
+    # todo: Plotting DOS
 
 def analyse_GCBH(save_data=None, energy_operation=None, label=None):
     if save_data==None or save_data==True:
@@ -995,7 +999,8 @@ class benchmark:
             shutil.copyfile("job.sh", f"{core}/job.sh")
             shutil.copyfile("run.py", f"{core}/run.py")
             shutil.copyfile("POSCAR", f"{core}/POSCAR")
-            os.chdir("./{core}")
+            os.chdir(f"./{core}")
+            subprocess.run(["sed", "-i", f"s/ccc/{str(core)}/g", "job.sh"])
             subprocess.run(["sbatch", "job.sh"])
             os.chdir("..")
     
@@ -1018,6 +1023,23 @@ class benchmark:
         fig = plt.figure(dpi = 200, figsize=(6,5))
         plt.plot(cores, times, 'o-', color="black")
         get_plot_settings(fig, x_label="Number of cores", y_label="Time per ionic step (hr)", fig_name="time.png")
+        cpu_times = [time*core for time,core in zip(times,cores)]
+        fig = plt.figure(dpi = 200, figsize=(6,5))
+        plt.plot(cores, cpu_times, 'o-', color="black")
+        get_plot_settings(fig, x_label="Number of cores", y_label="CPU Time per ionic step (cpu-hr)", fig_name="cpu_time.png")
+
+def pbc_correction(atoms):
+    cell = atoms.get_cell()
+    for atom in atoms:
+        if atom.y < 0:
+            atom.y = atom.y + cell[1][1]
+        if atom.y > cell[1][1]:
+            atom.y = atom.y - cell[1][1]
+        if atom.z < 0:
+            atom.z = atom.z + cell[2][2]
+        if atom.z > cell[2][2]:
+            atom.z = atom.z - cell[2][2]
+    return atoms
 
 def create_sigma3_gb(n, top_layers, bottom_layers):
     top_layers = top_layers*(n,1,1) # Repeating the layers.
