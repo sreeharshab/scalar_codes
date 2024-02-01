@@ -15,8 +15,11 @@ source .bashrc
 Note: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
 
 # Resources
-There are three parts to this repository. Use `help()` to get detailed documentation about the resources. Furthermore, there are examples in the repo for some of the resources.
+All the resources are available in the pipelines module. Use `help()` to get detailed documentation about the resources. Furthermore, there are examples some of the resources in the examples folder.
+
 Note: Presently, documentation is available only for select resources. Full documentation will be available soon.
+
+There are three parts to this repository.
 
 ## Part 1: Automation Codes for VASP Related Calculations
 All of the code is available in pipelines.py. The following are the available features:

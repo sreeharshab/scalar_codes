@@ -21,7 +21,7 @@ from ase.eos import EquationOfState as EOS
 from ase.visualize import view
 from ase.constraints import FixAtoms
 from ase.vibrations import Vibrations
-from ase.thermochemistry import HarmonicThermo
+from ase.thermochemistry import HarmonicThermo, IdealGasThermo
 import pandas as pd
 import re
 from distutils.dir_util import copy_tree
@@ -735,7 +735,7 @@ class frequency:
                     os.chdir("../")
     
     # todo: parse OUTCAR frequencies and modes for mode="vasp"
-    def analysis(self, potentialenergy, temperature, copy_json_files=None):
+    def analysis(self, mode, potentialenergy, temperature, copy_json_files=None, **kwargs):
         """Note: This method only works for `mode="ase"`.
 
         :param atoms: _description_
@@ -759,8 +759,18 @@ class frequency:
         vib.summary(log="vibrations.txt")
         vib_energies = vib.get_energies()
         vib_energies = np.array([i for i in vib_energies if i.imag==0])
-        thermo = HarmonicThermo(vib_energies = vib_energies, potentialenergy = potentialenergy)
-        thermo.get_helmholtz_energy(temperature)
+        if mode=="Harmonic":    
+            thermo = HarmonicThermo(vib_energies = vib_energies, potentialenergy = potentialenergy)
+            S = thermo.get_entropy(temperature)
+            H = thermo.get_helmholtz_energy(temperature)  
+            U = thermo.get_internal_energy(temperature)
+            return S,H,U
+        if mode=="IdealGas":
+            thermo = IdealGasThermo(vib_energies = vib_energies, potentialenergy = potentialenergy, **kwargs)
+            H = thermo.get_enthalpy(temperature)
+            S = thermo.get_entropy(temperature)
+            G = thermo.get_gibbs_energy(temperature)
+            return H,S,G
     
     def check_vib_files(self):
         f = open("file_size.txt", "w")
