@@ -15,11 +15,11 @@ source .bashrc
 Note: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
 
 # Resources
-All the resources are available in the pipelines module. Use `help()` to get detailed documentation about the resources. Furthermore, there are examples some of the resources in the examples folder.
+There are three parts to this repository. Part 1 and 2 are available in pipelines.py. Part 3 is available in gcbh.py.
+
+Use `help()` to get detailed documentation about the resources. Furthermore, there are examples some of the resources in the examples folder.
 
 Note: Presently, documentation is available only for select resources. Full documentation will be available soon.
-
-There are three parts to this repository.
 
 ## Part 1: Automation Codes for VASP Related Calculations
 All of the code is available in pipelines.py. The following are the available features:
@@ -40,7 +40,7 @@ All of the code is available in pipelines.py. The following are the available fe
 15. benchmark: Performs computational benchmark of a VASP job.
 
 ## Part 2: Codes to Study Silicon Systems
-16. create_sigma3_gb: Creates a Σ3 grain boundary with n layers using top_grain.vasp and bottom_grain.vasp files.
+16. create_sigma3_gb: Creates a Σ3 grain boundary with n layers using top_grain.vasp and bottom_grain.vasp files (available in the examples folder).
 17. slide_sigma3_gb: Slides Σ3 grain boundary. Serial and parallel runs are implemented. In each run, step and linear schemes are implemented. Note that step scheme is effective for studying the stick-slip sliding behavior and linear scheme is effective for studying elastic deformation.
 18. intercalate_Li: Inserts Li in all the interstice positions of Σ3 grain boundary.
 19. symmetrize_Si100_surface: Symmetrizes Si (100) strcuture along z axis. This is necessary to perform surface charging calculations using [VASPsol](https://github.com/henniggroup/VASPsol).
