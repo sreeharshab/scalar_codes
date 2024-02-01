@@ -17,12 +17,11 @@ Note: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fy
 # Resources
 There are three parts to this repository. Part 1 and 2 are available in pipelines.py. Part 3 is available in gcbh.py.
 
-Use `help()` to get detailed documentation about the resources. Furthermore, there are examples some of the resources in the examples folder.
+Use `help()` to get detailed documentation about the resources. Furthermore, there are examples for some of the resources in the examples folder.
 
 Note: Presently, documentation is available only for select resources. Full documentation will be available soon.
 
 ## Part 1: Automation Codes for VASP Related Calculations
-All of the code is available in pipelines.py. The following are the available features:
 1. cell_opt: Optimizes the size of the simulation cell.
 2. axis_opt: Optimizes the size of the required axis of the simulation cell.
 3. geo_opt: Performs geometry optimization on the system using inbuilt VASP optimizers (using the IBRION tag) or ASE optimizers.
