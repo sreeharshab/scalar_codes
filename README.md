@@ -14,8 +14,10 @@ source .bashrc
 ```
 Note: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
 
+Optional: scalar_codes can be used as a package if `/path_to_home_directory/` is appended to `PYTHONPATH`.
+
 # Resources
-There are two parts to this repository. All the resources are available in pipelines.py.
+There are two parts to this repository. Part 1 is available in pipelines.py and part 2 is available in silicon.py.
 
 Use `help()` to get detailed documentation about the resources. Furthermore, there are examples for some of the resources in the examples folder.
 

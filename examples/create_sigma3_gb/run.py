@@ -1,5 +1,5 @@
 from ase.io import read, write
-from pipelines import create_sigma3_gb
+from silicon import create_sigma3_gb
 
 if __name__=="__main__":
     top_layers = read("top_grain.vasp")

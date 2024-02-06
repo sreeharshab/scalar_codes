@@ -1,8 +1,6 @@
-from pipelines import *
-import ase
-import numpy as np
-from ase.io import read, write
-from ase.calculators.vasp import Vasp
+from silicon import slide_sigma3_gb
+from numpy import pi
+from ase.io import read
 
 if __name__=='__main__':
     atoms = read("POSCAR")

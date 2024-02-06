@@ -1,5 +1,5 @@
 from ase.io import read
-from pipelines import *
+from pipelines import frequency
 
 if __name__=="__main__":
     atoms = read("POSCAR")

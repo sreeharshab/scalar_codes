@@ -1,8 +1,8 @@
-from pipelines import *
-import ase
+from pipelines import get_plot_settings
+from silicon import slide_sigma3_gb
 import numpy as np
-from ase.io import read, write
-from ase.calculators.vasp import Vasp
+from numpy import pi
+from ase.io import read
 from matplotlib import pyplot as plt
 
 if __name__=='__main__':
@@ -13,7 +13,7 @@ if __name__=='__main__':
     system = slide_sigma3_gb(n_steps)
 
     # Saving the output trajectory
-    system.get_output_Trajectory(atoms, theta, calc_type='serial')
+    system.get_output_Trajectory(atoms, theta, calc_type='serial')  # Change calc_type to 'parallel' if run_parallel is used.
     
     # Obtaining the energies
     E = system.analysis(theta, property="Energy")

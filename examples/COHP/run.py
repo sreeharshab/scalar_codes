@@ -1,6 +1,6 @@
-from pipelines import *
+from pipelines import COHP
 import ase
-from ase.io import read, write
+from ase.io import read
 
 if __name__=="__main__":
     atoms = read("POSCAR")

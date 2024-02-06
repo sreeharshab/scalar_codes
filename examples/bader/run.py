@@ -1,4 +1,4 @@
-from pipelines import *
+from pipelines import bader
 import ase
 from ase.io import read, write
 

@@ -1,4 +1,5 @@
-from pipelines import *
+from pipelines import geo_opt
+from ase.io import read
 
 if __name__=="__main__":
     atoms = read('POSCAR')
