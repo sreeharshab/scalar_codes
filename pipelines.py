@@ -844,7 +844,7 @@ class surface_charging:
             subprocess.run(["sbatch", "optimize.sh"])
             os.chdir("../")
     
-    def analyse(self):
+    def analysis(self):
         PZC_nelect = self.get_PZC_nelect()
         os.rename("PZC_calc", f"{PZC_nelect}")
         subprocess.run(["python", "new_plot_sc.py", "-n", f"{PZC_nelect}"])
