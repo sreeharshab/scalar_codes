@@ -263,7 +263,7 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
             
     return atoms
 
-def bader(atoms, kpts, valence_electrons, addnl_settings=None):
+def bader(atoms, kpts, valence_electrons, addnl_settings=None, restart=None):
     """Performs bader charge analysis on the system. Charges can be viewed in ACF.dat file or using ase gui and choosing the Initial Charges label in the view tab.
 
     :param atoms: Atoms for which charge should be determined
@@ -322,13 +322,24 @@ def bader(atoms, kpts, valence_electrons, addnl_settings=None):
 
         return atoms
 
-    run_vasp(atoms)
-
-    run_bader()
-
-    atoms_with_charge = read_bader(atoms)
-    return atoms_with_charge
-
+    if restart is not True:
+        run_vasp(atoms)
+        run_bader()
+        atoms_with_charge = read_bader(atoms)
+        return atoms_with_charge
+    elif restart is True:
+        if os.path.exists("AECCAR0") and os.path.exists("AECCAR2") and not os.path.exists("ACF.dat"):
+            run_bader()
+            atoms_with_charge = read_bader(atoms)
+            return atoms_with_charge
+        elif os.path.exists("ACF.dat"):
+            atoms_with_charge = read_bader(atoms)
+            return atoms_with_charge
+        else:
+            run_vasp(atoms)
+            run_bader()
+            atoms_with_charge = read_bader(atoms)
+            return atoms_with_charge
 
 class COHP:
     """Performs COHP analysis on the system. The output is saved as cohp-1.png.
