@@ -21,15 +21,6 @@ import pandas as pd
 import re
 from distutils.dir_util import copy_tree
 
-logo = r""" ____  _            _ _                 
-|  _ \(_)_ __   ___| (_)_ __   ___  ___ 
-| |_) | | '_ \ / _ \ | | '_ \ / _ \/ __|
-|  __/| | |_) |  __/ | | | | |  __/\__ \
-|_|   |_| .__/ \___|_|_|_| |_|\___||___/
-        |_|                             
-        """
-print(logo)
-print("Sree Harsha Bhimineni\nYantao Xia\nUniversity of California, Los Angeles\nbsreeharsha@ucla.edu")
 
 """VASP related codes using ASE"""
 
