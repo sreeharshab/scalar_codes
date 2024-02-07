@@ -730,7 +730,7 @@ class frequency:
                     os.chdir("../")
     
     # todo: parse OUTCAR frequencies and modes for mode="vasp"
-    def analysis(self, mode, potentialenergy, temperature, copy_json_files=None, **kwargs):
+    def analysis(self, mode, potentialenergy, temperature, pressure=None, copy_json_files=None, **kwargs):
         """Note: This method only works for `mode="ase"`.
 
         :param atoms: _description_
@@ -739,6 +739,8 @@ class frequency:
         :type potentialenergy: _type_
         :param temperature: _description_
         :type temperature: _type_
+        :param pressure: _description_
+        :type pressure: float, optional
         :param copy_json_files: True only if `scheme="parallel"`, defaults to None
         :type copy_json_files: bool, optional
         """
@@ -761,10 +763,10 @@ class frequency:
             U = thermo.get_internal_energy(temperature)
             return S,H,U
         if mode=="IdealGas":
-            thermo = IdealGasThermo(vib_energies = vib_energies, potentialenergy = potentialenergy, **kwargs)
+            thermo = IdealGasThermo(vib_energies = vib_energies, potentialenergy = potentialenergy, atoms = atoms, **kwargs)
             H = thermo.get_enthalpy(temperature)
-            S = thermo.get_entropy(temperature)
-            G = thermo.get_gibbs_energy(temperature)
+            S = thermo.get_entropy(temperature, pressure)
+            G = thermo.get_gibbs_energy(temperature, pressure)
             return H,S,G
     
     def check_vib_files(self):
