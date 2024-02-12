@@ -1,4 +1,4 @@
-from pipelines import get_base_calc, set_vasp_key, get_selective_dynamics
+from pipelines import get_base_calc, set_vasp_key
 import os
 import shutil
 import subprocess
@@ -264,7 +264,26 @@ class slide_sigma3_gb:
             os.chdir("../")
         os.chdir(cwd)
 
-    # Testing done for calc_type="Energy" and "Force", working!
+    def get_selective_dynamics(self, file_name, index):
+        """Provides the selective dynamics of the atoms in the system.
+
+        :param file_name: Name of the file, example: "POSCAR"
+        :type file_name: string
+        :param index: Index of the atom for which the selective dynamics is to be obtained
+        :type index: int
+        :return: True if the atom is allowed to move, False if the atom is not allowed to move
+        :rtype: bool
+        """
+        with open(file_name,'r') as f:
+            lines = f.readlines()
+        
+        line = lines[index+9]
+
+        if "T" in line:
+            return True
+        elif "F" in line:
+            return False
+
     def analysis(self, theta, property=None):
         cwd = os.getcwd()
         os.chdir(cwd + f"/{int((theta/pi)*180 + 0.1)}")
@@ -301,7 +320,7 @@ class slide_sigma3_gb:
                 force_list = np.array([])
                 traj_atoms = read(traj+f"@{i+1}")
                 for atom in traj_atoms:
-                    if get_selective_dynamics(f"./{i+1}/level{max_level}_step{i+1}.vasp", atom.index)==False:
+                    if self.get_selective_dynamics(f"./{i+1}/level{max_level}_step{i+1}.vasp", atom.index)==False:
                         force_xyz = traj_atoms.get_forces()[atom.index]
                         force_xyz = np.array(force_xyz)
                         force = np.linalg.norm(force_xyz)

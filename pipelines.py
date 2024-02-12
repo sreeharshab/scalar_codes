@@ -152,11 +152,11 @@ def axis_opt(atoms, kpts, axis, npoints=5, eps=0.04, addnl_settings=None):
 
 
 def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
-    """Performs geometry optimization on the system using inbuilt VASP optimizers (using the IBRION tag) or ASE optimizers.
+    """Performs geometry optimization on the system using inbuilt VASP optimizer (IBRION=2) or ASE's BFGS optimizer.
 
     :param atoms: Atoms to be geometrically optimized
     :type atoms: Atoms object
-    :param mode: Type of optimizer to be used, `"vasp"` for IBRION=2 and `"ase"` for BFGS, defaults to "vasp"
+    :param mode: Type of optimizer to be used, "vasp" for IBRION=2 and "ase" for BFGS, defaults to "vasp"
     :type mode: str, optional
     :param opt_levels: Dictionary of dictionaries, each dictionary containing settings for each level of calculation, defaults to 
         ``{
@@ -261,7 +261,7 @@ def bader(atoms, kpts, valence_electrons, addnl_settings=None, restart=None):
     :type atoms: Atoms object
     :param kpts: KPOINTS used for the calculation
     :type kpts: list
-    :param valence_electrons: Dictionary containing the symbol of atoms as key and the corresponding valence electrons from POTCAR as value
+    :param valence_electrons: Dictionary containing the symbol of atoms as key and the corresponding valence electrons from POTCAR as value, example: {"Si":4, "H":1}
     :type valence_electrons: dict
     :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
     :type addnl_settings: dict, optional
@@ -340,7 +340,7 @@ class COHP:
 
         :param atoms: Atoms on which COHP analysis is performed.
         :type atoms: Atoms object
-        :param bonds: List of lists, where each list contains the indexes of two bonding atoms
+        :param bonds: List of lists, where each list contains the indexes of two bonding atoms, example: [[0,1],[1,2],[2,3]]
         :type bonds: list
         :param lobsterin_template: Path of file which contains lobster template. If no path is given, the default template is used, defaults to None
         :type lobsterin_template: str, optional
@@ -362,14 +362,14 @@ class COHP:
         self.lobsterin_template = template
 
     def run_vasp(self, kpts, valence_electrons, addnl_settings=None):
-        """_summary_
+        """Runs a single point calculation on the system to generate the WAVECAR and CHGCAR files required for COHP analysis.
 
-        :param kpts: _description_
-        :type kpts: _type_
-        :param valence_electrons: _description_
-        :type valence_electrons: _type_
-        :param addnl_settings: _description_, defaults to None
-        :type addnl_settings: _type_, optional
+        :param kpts: KPOINTS used for the calculation
+        :type kpts: list
+        :param valence_electrons: Dictionary containing the symbol of atoms as key and the corresponding valence electrons from POTCAR as value, example: {"Si":4, "H":1}
+        :type valence_electrons: dict
+        :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
+        :type addnl_settings: dict, optional
         """
         atoms = self.atoms
         calc = get_base_calc()
@@ -387,6 +387,8 @@ class COHP:
         atoms.get_potential_energy()
 
     def write_lobsterin(self):
+        """Adds the information about the bonds to the lobsterin file.
+        """
         lobsterin = "lobsterin"
 
         with open(f"{lobsterin}", "w+") as fhandle:
@@ -396,10 +398,25 @@ class COHP:
                 fhandle.write(f"cohpBetween atom {b[0]+1} and atom {b[1]+1}\n")
 
     def run_lobster(self):
+        """Runs the lobster executable.
+        """
         lobster = os.getenv("LOBSTER")
         subprocess.run([lobster], capture_output=True)
 
     def plot(self, cohp_xlim, cohp_ylim, icohp_xlim, icohp_ylim):
+        """Plots the COHP and ICOHP data.
+
+        :param cohp_xlim: Lowest and highest COHP values in eV for COHP plot, example: [-2.6, 1]
+        :type cohp_xlim: list
+        :param cohp_ylim: Lowest and highest energy values in eV for COHP plot, example: [-11, 8.5]
+        :type cohp_ylim: list
+        :param icohp_xlim: Lowest and highest ICOHP values in eV for ICOHP plot, example: [-0.01, 1.5]
+        :type icohp_xlim: list
+        :param icohp_ylim: Lowest and highest energy values in eV for ICOHP plot, example: [-11, 8.5]
+        :type icohp_ylim: list
+        :return: None
+        :rtype: None
+        """
         # modded from https://zhuanlan.zhihu.com/p/470592188
         # lots of magic numbers, keep until it breaks down
 
@@ -493,7 +510,16 @@ class COHP:
             plt.close()
 
 class NEB:
+    """Performs Nudged Elastic Band calculation to obtain transition state between initial and final images. Intermediate images can be generated using either linear interpolation or Opt'n Path program. NEB can be run using ASE or VTST scripts.
+    """
     def __init__(self, initial, final):
+        """Initializes the NEB class.
+
+        :param initial: Initial image
+        :type initial: Atoms object
+        :param final: Final image
+        :type final: Atoms object
+        """
         self.initial = initial
         self.final = final
         self.images = None
@@ -501,6 +527,13 @@ class NEB:
         self.fmin = 1e-2
 
     def interpolate(self, method="linear", nimage=8):
+        """Interpolates the initial and final images to generate intermediate images.
+
+        :param method: Method used to perform interpolation, "linear" for linear interpolation and "optnpath" for interpolation using the Opt'n Path program, defaults to "linear"
+        :type method: str, optional
+        :param nimage: Number of images (including inital and final), defaults to 8
+        :type nimage: int, optional
+        """
         if method == "linear":
             images = [self.initial]
             images += [self.initial.copy() for i in range(nimage - 2)]
@@ -669,7 +702,16 @@ class Dimer:
         self.atoms.get_potential_energy()
 
 class frequency:
+    """Performs vibrational analysis on the system using VASP or ASE. Use ASE for calculations involving large systems as it supports a parallel scheme.
+    """
     def __init__(self, atoms, vib_indices=None):
+        """Initializes the frequency class.
+
+        :param atoms: Atoms for which vibrational analysis is performed
+        :type atoms: Atoms object
+        :param vib_indices: Indices of the atoms to be vibrated, if None, all atoms with Selective Dynamics F are ignored, defaults to None
+        :type vib_indices: list, optional
+        """
         self.atoms = atoms
         if vib_indices==None:
             vib_indices = self.get_vib_indices()
@@ -678,6 +720,11 @@ class frequency:
         self.vib_indices = vib_indices
 
     def get_vib_indices(self):
+        """Returns the indices of the atoms to be vibrated. All atoms with Selective Dynamics F are ignored.
+
+        :return: Indices of the atoms to be vibrated
+        :rtype: list
+        """
         atoms = self.atoms
         constr = atoms.constraints
         constr = [c for c in constr if isinstance(c, FixAtoms)]
@@ -688,6 +735,17 @@ class frequency:
         return vib_indices
     
     def run(self, kpts=None, mode="ase", scheme=None, addnl_settings=None):
+        """Runs frequency calculation on the system.
+
+        :param kpts: KPOINTS used for the calculation, a list of KPOINTS are to be provided if mode is "vasp" and mode is "ase" with "serial" scheme, defaults to None
+        :type kpts: list, optional
+        :param mode: _description_, defaults to "ase"
+        :type mode: str, optional
+        :param scheme: _description_, defaults to None
+        :type scheme: _type_, optional
+        :param addnl_settings: _description_, defaults to None
+        :type addnl_settings: _type_, optional
+        """
         atoms = self.atoms
         calc = get_base_calc()
         if addnl_settings!=None:
@@ -699,6 +757,7 @@ class frequency:
             # avoid this on large structures, use ase instead
             # ncore/npar unusable, leads to kpoint errors
             # isym must be switched off, leading to large memory usage
+            assert kpts!=None, "kpts must be provided when mode is vasp"
             calc.set(
                 kpts=kpts,
                 ibrion=5,
@@ -717,6 +776,7 @@ class frequency:
             vib_indices = self.vib_indices
 
             if scheme == "serial":
+                assert kpts!=None, "kpts must be provided when mode is ase and scheme is serial"
                 vib = Vibrations(atoms, indices=vib_indices)
                 vib.run()  # this will save json files
         
@@ -733,17 +793,17 @@ class frequency:
     
     # todo: parse OUTCAR frequencies and modes for mode="vasp"
     def analysis(self, mode, potentialenergy, temperature, pressure=None, copy_json_files=None, **kwargs):
-        """Note: This method only works for `mode="ase"`.
+        """Performs analysis after the frequency calculation. Note: This method only works for `mode="ase"`.
 
-        :param atoms: _description_
-        :type atoms: _type_
-        :param potentialenergy: _description_
-        :type potentialenergy: _type_
-        :param temperature: _description_
-        :type temperature: _type_
-        :param pressure: _description_
+        :param atoms: Atoms used for the frequency calculation
+        :type atoms: Atoms object
+        :param potentialenergy: Potential energy of the system from geo_opt calculation
+        :type potentialenergy: float
+        :param temperature: Temperature at which the analysis is performed
+        :type temperature: float
+        :param pressure: Pressure at which the analysis is performed, defaults to None
         :type pressure: float, optional
-        :param copy_json_files: True only if `scheme="parallel"`, defaults to None
+        :param copy_json_files: Copies .json files from invidual atom's index directory to a common vib folder, True only if `scheme="parallel"`, defaults to None
         :type copy_json_files: bool, optional
         """
         atoms = self.atoms
@@ -765,6 +825,8 @@ class frequency:
             U = thermo.get_internal_energy(temperature)
             return S,H,U
         if mode=="IdealGas":
+            assert pressure!=None, "pressure must be provided when mode is IdealGas"
+            assert kwargs!=None, "geometry, symmetry number and spin must be provided when mode is IdealGas"
             thermo = IdealGasThermo(vib_energies = vib_energies, potentialenergy = potentialenergy, atoms = atoms, **kwargs)
             H = thermo.get_enthalpy(temperature)
             S = thermo.get_entropy(temperature, pressure)
@@ -772,10 +834,15 @@ class frequency:
             return H,S,G
     
     def check_vib_files(self):
+        """Checks if the .json files are present in the individual atom's index directory. This method only works for `mode="ase"` with `scheme="parallel"`.
+        """
         f = open("file_size.txt", "w")
         vib_indices = self.vib_indices
         for indice in vib_indices:
-            os.chdir(f"./{indice}/vib")
+            try:
+                os.chdir(f"./{indice}/vib")
+            except FileNotFoundError:
+                assert False, f"vib folder not found in {indice}. Make sure you ran a parallel frequency calculation with ase before using this method."
             files = os.listdir()
             for file in files:
                 f.write(str(indice) + "  " + str(os.path.getsize(file)) + "\n")
@@ -783,7 +850,9 @@ class frequency:
 
 
 class surface_charging:
-    def __init__(self) -> None:
+    """Performs surface charging calculation using VASPsol.
+    """
+    def __init__(self):
         pass
 
     # Parsing the OUTCAR to get NELECT.
@@ -799,14 +868,26 @@ class surface_charging:
         return float(PZC_nelect)
     
     """
-    n_nelect are the number of nelects you want to run surface charging for.
-    width_nelect is the difference between each nelect.
     Example:
     If PZC_nelect = 40, n_nelect = 4 and width_nelect = 0.25, the values of nelect will be [39.50, 39.75, 40.25, 40.50].
     **kwargs are used to get the arguments of the symmetrize function.
-    Use custom_nelect when you know PZC_nelect. Leave n_nelect=None and width_nelect=None when custom_nelect is used.
     """
     def run(self, atoms, opt_levels, n_nelect=None, width_nelect=None, custom_nelect=None, symmetrize_function=None, **kwargs):
+        """Runs a surface charging calculation.
+
+        :param atoms: Atoms used for surface charging calculation
+        :type atoms: Atoms object
+        :param opt_levels: Dictionary of dictionaries, each dictionary containing settings for each level of calculation
+        :type opt_levels: dict
+        :param n_nelect: Number of nelects, use this argument when PZC_nelect is not known defaults to None
+        :type n_nelect: int, optional
+        :param width_nelect: Difference between each nelect, use this argument along with n_nelect when PZC_nelect is not known, defaults to None
+        :type width_nelect: float, optional
+        :param custom_nelect: List of custom nelects, defaults to None
+        :type custom_nelect: list, optional
+        :param symmetrize_function: Function used to symmetrize atoms, defaults to None
+        :type symmetrize_function: function, optional
+        """
         if symmetrize_function!=None:
             atoms = symmetrize_function(atoms, **kwargs)
             write("POSCAR_sym", atoms)
@@ -825,6 +906,7 @@ class surface_charging:
             shutil.copyfile("CONTCAR", "../POSCAR_solvated")
             os.chdir("../")
         
+        assert not (n_nelect==None and width_nelect==None and custom_nelect==None), "Either provide n_nelect and width_nelect or custom_nelect."
         if n_nelect!=None and width_nelect!=None:
             PZC_nelect = self.get_PZC_nelect()
             n_nelect = int(n_nelect/2)
@@ -849,10 +931,106 @@ class surface_charging:
             os.chdir("../")
     
     def analysis(self):
+        """Produces the energy vs potential plot using new_plot_sc.py.
+        """
         PZC_nelect = self.get_PZC_nelect()
         os.rename("PZC_calc", f"{PZC_nelect}")
         subprocess.run(["python", "new_plot_sc.py", "-n", f"{PZC_nelect}"])
         os.rename(f"{PZC_nelect}", "PZC_calc")
+
+class gibbs_free_energy:
+    """Gives the gibbs free energy of the system. If surface_charging is used, the parabola fit is used to obtain the energy vs potential. If geo_opt is used, OUTCAR is used to obtain energy. The vibrational energy is obtained using the frequency class.  Note: Only works if ASE is used to run the frequency calculation.
+    """
+    def __init__(self, calc_root_dir):
+        """Initializes the gibbs_free_energy class.
+
+        :param calc_root_dir: Root directory of the calculation
+        :type calc_root_dir: string
+        """
+        self.calc_root_dir = calc_root_dir
+
+    def get_parabola(self):
+        """Fits a parabola to the energy vs potential plot using analysis.py.
+
+        :return: Coefficients of the parabola
+        :rtype: list
+        """
+        calc_root_dir = self.calc_root_dir
+        pwd = os.getcwd()
+        os.chdir(f"{calc_root_dir}")
+        assert os.path.exists("analysis.py"), "analysis.py not found in the root directory."
+        subprocess.run(["python", "analysis.py"])
+        assert os.path.exists("fit.txt"), "fit.txt not found in the root directory, check your surface charging calculation for completion."
+        with open("fit.txt", "r") as f:
+            lines = f.readlines()
+        lines = np.array([float(line) for line in lines])
+        os.chdir(pwd)
+        return lines
+
+    def get_energy(self, potential=None, outcar_location="./"):
+        """Gives the energy of the system.
+
+        :param potential: Potential at which energy is to be calculated, defaults to None
+        :type potential: float, optional
+        :param outcar_location: Location of OUTCAR in the root directory, defaults to "./"
+        :type outcar_location: str, optional
+        :return: Energy of the system
+        :rtype: float
+        """
+        calc_root_dir = self.calc_root_dir
+        pwd = os.getcwd()
+        os.chdir(f"{calc_root_dir}")
+        try:
+            if potential is None:
+                os.chdir(f"{outcar_location}")
+                assert os.path.exists("OUTCAR"), "OUTCAR not found in the given location."
+                atoms = read("OUTCAR")
+                return atoms.get_potential_energy()
+            else:
+                fit_param = self.get_parabola()
+                return fit_param[0]*potential**2 + fit_param[1]*potential + fit_param[2]
+        finally:
+            os.chdir(pwd)
+
+    def get_vib_energy(self, temperature, pressure=None):
+        """Obtain the vibrational energy of the system using the frequency calculation.
+
+        :param temperature: Temperature at which the vibrational energy is to be calculated
+        :type temperature: float
+        :param pressure: Pressure at which the vibrational energy is to be calculated, pressure must be given if `mode="IdealGas"` in analysis method of the frequency class, defaults to None
+        :type pressure: float, optional
+        :return: Vibrational energy of the system
+        :rtype: float
+        """
+        calc_root_dir = self.calc_root_dir
+        pwd = os.getcwd()
+        os.chdir(f"{calc_root_dir}/frequency")
+        assert os.path.exists("analysis.py"), "analysis.py not found in the frequency directory."
+        if pressure is None:
+            subprocess.run(["python", "analysis.py", "--temperature", f"{temperature}"])
+        elif pressure is not None:
+            subprocess.run(["python", "analysis.py", "--temperature", f"{temperature}", "--pressure", f"{pressure}"])
+        assert os.path.exists("Gibbs.txt"), "Gibbs.txt not found in the frequency directory, check your frequency calculation for completion."
+        with open("Gibbs.txt", "r") as f:
+            G = float(f.read())
+        os.chdir(pwd)
+        return G
+    
+    def get_gibbs_free_energy(self, temperature, pressure=None, potential=None, outcar_location="./"):
+        """Gives the gibbs free energy of the system.
+
+        :param temperature: Temperature at which the gibbs free energy is to be calculated
+        :type temperature: float
+        :param pressure: Pressure at which the vibrational energy is to be calculated, pressure must be given if `mode="IdealGas"` in analysis method of the frequency class, defaults to None
+        :type pressure: float, optional
+        :param potential: Potential at which energy is to be calculated, defaults to None
+        :type potential: float, optional
+        :param outcar_location: Location of OUTCAR in the root directory, defaults to "./"
+        :type outcar_location: string, optional
+        :return: Gibbs free energy of the system
+        :rtype: float
+        """
+        return self.get_energy(potential=potential, outcar_location=outcar_location)+ self.get_vib_energy(temperature, pressure=pressure)
 
 def dos(atoms, kpts, addnl_settings=None):
     calc = get_base_calc()
@@ -870,7 +1048,16 @@ def dos(atoms, kpts, addnl_settings=None):
     # todo: Plotting DOS
 
 def analyse_GCBH(save_data=None, energy_operation=None, label=None):
-    if save_data==None or save_data==True:
+    """Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using catalapp.
+
+    :param save_data: Reads and saves data from the opt_folder, defaults to None
+    :type save_data: bool, optional
+    :param energy_operation: Function which operates on energy data from opt_folder, example: `def energy_operation(e):return (e+2)` where e is the energy read from opt_folder, defaults to None
+    :type energy_operation: function, optional
+    :param label: Label of the plots, defaults to None
+    :type label: string, optional
+    """
+    if save_data is not False:
         E = []
         f = open("energies.txt", "w")
         traj = Trajectory("grandcanonical.traj", "w")
@@ -881,21 +1068,23 @@ def analyse_GCBH(save_data=None, energy_operation=None, label=None):
             os.chdir(dir)
             atoms = read("opt3.OUTCAR")
             e = atoms.get_potential_energy()
-            if energy_operation==None or energy_operation==False:
+            if energy_operation is None:
                 E.append(e)
-            elif energy_operation==True:
+                f.write(f"{e}\n")
+            elif energy_operation is not None:
                 E.append(energy_operation(e))
-            f.write(f"{energy_operation(e)}\n")
+                f.write(f"{energy_operation(e)}\n")
             traj.write(atoms)
             os.chdir("../")
         os.chdir("../")
-    elif save_data==False:
+    elif save_data is False:
         E = []
         with open("energies.txt", "r") as f:
             data = f.readlines()
             for i in data:
                     E.append(float(i))
 
+    assert E!=None, "No data found. Set save_data=True to save data."
     E = np.array(E)
     E = np.expand_dims(E, axis=0)
 
@@ -934,6 +1123,11 @@ def analyse_GCBH(save_data=None, energy_operation=None, label=None):
     plt.savefig("analysis_vertical.png", bbox_inches="tight")
 
 def get_neighbor_list(atoms):
+    """Provides the neigbor list for the system. Output is provided in Neighbor_List.txt file. Neighbors of each atom, their positions and coordination numbers of each atom are provided based on ASE's natural cutoff distances.
+
+    :param atoms: Atoms object for which the neighbor list is to be obtained
+    :type atoms: Atoms object
+    """
     nat_cut = natural_cutoffs(atoms, mult=1)
     nl = NeighborList(nat_cut, self_interaction=False, bothways=True)
     nl.update(atoms)
@@ -954,10 +1148,17 @@ def get_neighbor_list(atoms):
         indices, offsets = nl.get_neighbors(i)
         f.write(str(i) + " " + str(len(indices)) + "\n")
 
-def check_run_completion(location, output="OUTCAR"):
+def check_run_completion(location):
+    """Checks for completion of a VASP job at the provided location.
+
+    :param location: Location of the VASP job
+    :type location: string
+    :return: True if the job is completed, False if the job is not completed
+    :rtype: bool
+    """
     cwd = os.getcwd()
     os.chdir(location)
-    with open(output, "r") as f:
+    with open("OUTCAR", "r") as f:
         content = f.readlines()
         c = 0
         for line in content:
@@ -970,6 +1171,11 @@ def check_run_completion(location, output="OUTCAR"):
         return True
 
 def get_cell_info(atoms):
+    """Provides information about the volume, vector lengths and angles of the unit cell.
+
+    :param atoms: Atoms object for which the cell information is to be obtained
+    :type atoms: Atoms object
+    """
     cell = atoms.get_cell()
     
     volume = cell.volume
@@ -986,22 +1192,20 @@ def get_cell_info(atoms):
     print("Angle beta:", angles[1])
     print("Angle gamma", angles[2])
 
-def get_selective_dynamics(file_name, index):
-    with open(file_name,'r') as f:
-        lines = f.readlines()
-    
-    line = lines[index+9]
-
-    if "T" in line:
-        return True
-    elif "F" in line:
-        return False
-
 class benchmark:
+    """Performs computational benchmark of a VASP job.
+    """
     def __init__(self, cores):
+        """Initializes the benchmark class.
+
+        :param cores: List of cores to be used for the benchmark
+        :type cores: list
+        """
         self.cores = cores
 
     def submit_jobs(self):
+        """Submits the VASP jobs for the benchmark.
+        """
         cores = self.cores
         for core in cores:
             os.mkdir(f"{core}")
@@ -1014,6 +1218,11 @@ class benchmark:
             os.chdir("..")
     
     def get_benchmark(self, outcar_location="./"):
+        """Obtains the benchmark results.
+
+        :param outcar_location: Location of the OUTCAR for the calculation, defaults to "./"
+        :type outcar_location: str, optional
+        """
         cores = self.cores
         times = []
         cwd = os.getcwd()

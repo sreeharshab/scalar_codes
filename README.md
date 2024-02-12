@@ -21,23 +21,23 @@ There are two parts to this repository. Part 1 is available in pipelines.py and 
 
 Use `help()` to get detailed documentation about the resources. Furthermore, there are examples for some of the resources in the examples folder.
 
-Note: Presently, documentation is available only for select resources. Full documentation will be available soon.
+Note: Presently, documentation is available for all resources in pipelines.py. Full documentation will be available soon.
 
 ## Part 1: Automation Codes for VASP Related Calculations
 1. cell_opt: Optimizes the size of the simulation cell.
 2. axis_opt: Optimizes the size of the required axis of the simulation cell.
-3. geo_opt: Performs geometry optimization on the system using inbuilt VASP optimizers (using the IBRION tag) or ASE optimizers.
-4. bader: Performs bader charge analysis on the system. Charges can be viewed in ACF.dat file or using ase gui and choosing the Initial Charges label in the view tab.
-5. COHP: Performs COHP analysis on the system. The output is saved as cohp-1.png.
-6. NEB: Performs Nudged Elastic Band calculation to obtain transition state between initial and final images. Intermediate images can be generated using either linear interpolation or [Opt'n Path](http://forge.cbp.ens-lyon.fr/redmine/projects/optnpath/wiki) program. NEB can be run using [ASE](https://wiki.fysik.dtu.dk/ase/) or [VTST](https://theory.cm.utexas.edu/vtsttools/) scripts.
-7. frequency: Performs vibrational analysis on the system using VASP or ASE. Use ASE for calculations involving large systems as it supports a parallel scheme.
+3. geo_opt: Performs geometry optimization on the system using inbuilt [VASP](https://www.vasp.at/wiki/index.php/The_VASP_Manual) optimizer (IBRION=2) or [ASE](https://wiki.fysik.dtu.dk/ase/)'s BFGS optimizer.
+4. bader: Performs [bader charge analysis](https://theory.cm.utexas.edu/henkelman/code/bader/) on the system. Charges can be viewed in ACF.dat file or using ase gui and choosing the Initial Charges label in the view tab.
+5. COHP: Performs Crystal Orbital Hamilton Population analysis on the system using [LOBSTER](http://www.cohp.de/).
+6. NEB: Performs Nudged Elastic Band calculation to obtain transition state between initial and final images. Intermediate images can be generated using either linear interpolation or [Opt'n Path](http://forge.cbp.ens-lyon.fr/redmine/projects/optnpath/wiki) program. NEB can be run using ASE or [VTST](https://theory.cm.utexas.edu/vtsttools/) scripts. Note: Unstable, bugs will be resolved soon.
+7. frequency: Performs vibrational analysis on the system using VASP or ASE. Use ASE for calculations involving large systems as it supports a parallel scheme. Note: analysis method does not work for a VASP frequency calculation, it will be implemented soon.
 8. surface_charging: Performs surface charging calculation using [VASPsol](https://github.com/henniggroup/VASPsol).
-9. dos: Performs a DOS calculation. The code for visualizing DOS will be implemented soon.
-10. analyse_GCBH: Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using [catalapp](https://github.com/GengSS/catalapp?tab=readme-ov-file).
-11. get_neighbor_list: Provides the neigbor list for the system. Output is provided in Neighbor_List.txt file. Neighbors of each atom, their positions and coordination numbers of each atom are provided based on ASE's natural cutoff distances.
-12. check_run_completion: Checks for completion of a VASP job at the provided location.
-13. get_cell_info: Provides information about the volume, vector lengths and angles of the unit cell.
-14. get_selective_dynamics: Checks whether selective dynamics is true or false for the atom corresponding to the provided index.
+9. gibbs_free_energy: Gives the gibbs free energy of the system. If surface_charging is used, the parabola fit is used to obtain the energy vs potential. If geo_opt is used, OUTCAR is used to obtain energy. The vibrational energy is obtained using the frequency class.  Note: Only works if ASE is used to run the frequency calculation. These energies can be used in [PyEnergyDiagrams](https://github.com/giacomomarchioro/PyEnergyDiagrams) to generate reaction pathways.
+10. dos: Performs a DOS calculation. Note: The code for visualizing DOS will be implemented soon.
+11. analyse_GCBH: Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using [catalapp](https://github.com/GengSS/catalapp?tab=readme-ov-file).
+12. get_neighbor_list: Provides the neigbor list for the system. Output is provided in Neighbor_List.txt file. Neighbors of each atom, their positions and coordination numbers of each atom are provided based on ASE's natural cutoff distances.
+13. check_run_completion: Checks for completion of a VASP job at the provided location.
+14. get_cell_info: Provides information about the volume, vector lengths and angles of the unit cell.
 15. benchmark: Performs computational benchmark of a VASP job.
 
 ## Part 2: Codes to Study Silicon Systems
