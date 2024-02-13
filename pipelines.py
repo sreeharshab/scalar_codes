@@ -194,7 +194,7 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
         save_files(level)
         return atoms
     
-    def opt_by_ase(opt_levels, level):
+    def opt_by_ase(atoms, opt_levels, level):
         calc = get_base_calc()
         # default settings when using ase optimizer
         set_vasp_key(calc, 'ibrion', -1)
@@ -206,7 +206,6 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
                 continue
             set_vasp_key(calc, key, level_settings[key])
 
-        atoms = read("CONTCAR")
         atoms.calc = calc
         opt = BFGS(atoms,
                     trajectory = f"opt{level}.traj",
@@ -231,7 +230,7 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
             if mode=="vasp":
                 atoms = opt_by_vasp(opt_levels, level)
             elif mode=="ase":
-                atoms = opt_by_ase(opt_levels, level)
+                atoms = opt_by_ase(atoms, opt_levels, level)
     
     if restart == True:
         last_level = 0
@@ -239,18 +238,19 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
             if os.path.exists(f"opt{level}.out"):
                 last_level = level
         levels = list(levels)
-        # if a new calc is started with restart=True
         if last_level==0:
             last_level = levels[0]-1
-            if os.path.exists(f"CONTCAR"):
-                pass
-            else:
-                write("CONTCAR", atoms)
         for level in range(last_level+1,levels[-1]+1):
             if mode=="vasp":
+                if os.path.exists("CONTCAR"):
+                    pass
+                else:
+                    write("CONTCAR", atoms)
                 atoms = opt_by_vasp(opt_levels, level)
             elif mode=="ase":
-                atoms = opt_by_ase(opt_levels, level)
+                if os.path.exists(f"opt{level}.traj"):
+                    atoms = read(f"opt{level}.traj@-1")
+                atoms = opt_by_ase(atoms, opt_levels, level)
             
     return atoms
 
