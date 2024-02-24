@@ -930,12 +930,119 @@ class surface_charging:
             subprocess.run(["sbatch", "optimize.sh"])
             os.chdir("../")
     
+    def parse_output(self):
+        """Parses the output of the surface charging calculation to get the energy, Fermi energy and Fermi shift.
+
+        :return: Energy, Fermi energy and Fermi shift of the calculation
+        :rtype: tuple
+        """
+        with open("OUTCAR", "r") as f:
+            outcar = f.readlines()
+        outcar = "".join(outcar)
+
+        # Parsing the OUTCAR to get the energy of the system.
+        try:
+            e_pattern = re.compile(r'entropy=\s+-?\d+.\d+\s+energy\(sigma->0\)\s+=\s+(-?\d+\.\d+)')
+            e = re.findall(e_pattern, outcar)[-1]
+            if e:
+                e = float(e)
+            else:
+                raise re.error("Energy not found in OUTCAR")
+        except re.error as error:
+            print(f"EnergyNotFoundError: {error}")
+        
+        # Parsing the OUTCAR to get Fermi energy.
+        try:
+            e_fermi_pattern = re.compile(r'E-fermi\s+:\s+(\-\d+\.\d+)')
+            e_fermi = re.findall(e_fermi_pattern, outcar)[-1]
+            if e_fermi:
+                e_fermi = float(e_fermi)
+            else:
+                raise re.error("Fermi energy not found in OUTCAR")
+        except re.error as error:
+            print(f"FermiEnergyNotFoundError: {error}")
+        
+        with open("vasp.out", "r") as f:
+            vaspout = f.readlines()
+        vaspout = "".join(vaspout)
+
+        # Parsing vasp.out to get Fermi Shift.
+        try:
+            fermi_shift_pattern = re.compile(r'FERMI_SHIFT\s+=\s+(\d+\.\d+)')
+            fermi_shift = re.findall(fermi_shift_pattern, vaspout)[-1]
+            if fermi_shift:
+                fermi_shift = float(fermi_shift)
+            else:
+                raise re.error("Fermi shift not found in vasp.out")
+        except re.error as error:
+            print(f"FermiShiftNotFoundError: {error}")
+        
+        return e, e_fermi, fermi_shift
+    
+    def plot_parabola(self,PZC_nelect):
+        """Generates the energy vs potential plot.
+
+        :param PZC_nelect: Number of electrons at PZC
+        :type PZC_nelect: float
+        """
+        def isfloat(value):
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return False
+        subdirs = [f.path for f in os.scandir("./") if f.is_dir()]
+        subdirs = map(lambda x:re.sub('./', '', x), subdirs)
+        subdirs = [subdir for subdir in subdirs if isfloat(subdir)]
+
+        n_elects, es, e_fermis, fermi_shifts = np.array([]), np.array([]), np.array([]), np.array([])
+        for dir in subdirs:
+            os.chdir(f"./{dir}")
+            e, e_fermi, fermi_shift = self.parse_output()
+            n_elects = np.append(n_elects, float(dir))
+            es = np.append(es, e)
+            e_fermis = np.append(e_fermis, e_fermi)
+            fermi_shifts = np.append(fermi_shifts, fermi_shift)
+            os.chdir("../")
+        
+        vacpot = 4.44
+        work_functions = -e_fermis - fermi_shifts
+        SHEpots = work_functions - vacpot
+        es  = es + fermi_shifts*(n_elects - PZC_nelect)
+        gs = es + work_functions*(n_elects - PZC_nelect)
+        Lipots = np.array([SHEpot+3.04 for SHEpot in SHEpots])
+        f = open("data.txt","w")
+        for n_e,V,G in zip(n_elects,Lipots,gs):
+            f.write("NELECT = " + str(n_e) + "\n")
+            f.write("PotvsLi+/Li = "+ str(V) + "\n")
+            f.write("G = " + str(G) + "\n")
+            f.write("\n")
+        f.close()
+
+        quadratic = lambda x, a, b, c: a * x ** 2 + b * x + c
+        parameter, _ = curve_fit(quadratic, Lipots, gs)
+        with open("fit.txt", "w") as f:
+            for i in parameter:
+                f.write(f"{i}\n")
+        f.close()
+        fitted = lambda x: parameter[0] * x ** 2 + parameter[1] * x + parameter[2]
+
+        fig = plt.figure(dpi = 200, figsize=(6,5))
+        x = np.linspace(Lipots.min()-0.2, Lipots.max()+0.2, 100)
+        y = list(map(fitted, x))
+        plt.title('a={}\nb={}\nc={}'.format(*parameter))
+        plt.scatter(Lipots, gs, label='original data', color='indigo')
+        plt.plot(x, y, label='fitted', color='indigo')
+        get_plot_settings(fig,"U vs Li+/Li (V)","G (eV)","g-pot.png","upper right")
+        
+        return fig
+    
     def analysis(self):
-        """Produces the energy vs potential plot using new_plot_sc.py.
+        """Generates the energy vs potential plot.
         """
         PZC_nelect = self.get_PZC_nelect()
         os.rename("PZC_calc", f"{PZC_nelect}")
-        subprocess.run(["python", "new_plot_sc.py", "-n", f"{PZC_nelect}"])
+        self.plot_parabola(PZC_nelect)
         os.rename(f"{PZC_nelect}", "PZC_calc")
 
 class gibbs_free_energy:
