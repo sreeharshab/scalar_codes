@@ -12,7 +12,7 @@ Exit your `.bashrc` and source it as follows:
 ```
 source .bashrc
 ```
-Note: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
+Note: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/), [SciPy](https://scipy.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
 
 Optional: scalar_codes can be used as a package if `/path_to_home_directory/` is appended to `PYTHONPATH`.
 

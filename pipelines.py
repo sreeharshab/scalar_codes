@@ -20,6 +20,7 @@ from ase.thermochemistry import HarmonicThermo, IdealGasThermo
 import pandas as pd
 import re
 from distutils.dir_util import copy_tree
+from scipy.optimize import curve_fit
 
 
 """VASP related codes using ASE"""
