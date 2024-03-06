@@ -12,24 +12,39 @@ Exit your `.bashrc` and source it as follows:
 ```
 source .bashrc
 ```
-Note: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/), [SciPy](https://scipy.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
+**Note**: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/), [SciPy](https://scipy.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
 
-Optional: scalar_codes can be used as a package if `/path_to_home_directory/` is appended to `PYTHONPATH`.
+**Optional**: scalar_codes can be used as a package if `/path_to_home_directory/` is appended to `PYTHONPATH`.
 
 # Resources
 There are two parts to this repository. Part 1 is available in pipelines.py and part 2 is available in silicon.py.
 
 Use `help()` to get detailed documentation about the resources. Furthermore, there are examples for some of the resources in the examples folder.
 
-Note: Presently, documentation is available for all resources in pipelines.py. Full documentation will be available soon.
+**Note**: Presently, documentation is available for all resources in pipelines.py. Full documentation will be available soon.
+
+The defaults for all VASP related calculations are as follows:
+`gga="PE",
+lreal="Auto",
+lplane=True,
+lwave=False,
+lcharg=False,
+ncore=8,
+prec="Normal",
+encut=300,
+ediff=1e-6,
+algo="VeryFast",
+ismear=-5,
+gamma=True`  
+You can change the defaults and add additional settings using `opt_levels` parameter for `geo_opt` and `surface_charging` and using `addnl_settings` parameter for all other calculations.
 
 ## Part 1: Automation Codes for VASP Related Calculations
 1. cell_opt: Optimizes the size of the simulation cell.
 2. axis_opt: Optimizes the size of the required axis of the simulation cell.
 3. geo_opt: Performs geometry optimization on the system using inbuilt [VASP](https://www.vasp.at/wiki/index.php/The_VASP_Manual) optimizer (IBRION=2) or [ASE](https://wiki.fysik.dtu.dk/ase/)'s BFGS optimizer.
 4. bader: Performs [bader charge analysis](https://theory.cm.utexas.edu/henkelman/code/bader/) on the system. Charges can be viewed in ACF.dat file or using ase gui and choosing the Initial Charges label in the view tab.
-5. COHP: Performs Crystal Orbital Hamilton Population analysis on the system using [LOBSTER](http://www.cohp.de/).
-6. NEB: Performs Nudged Elastic Band calculation to obtain transition state between initial and final images. Intermediate images can be generated using either linear interpolation or [Opt'n Path](http://forge.cbp.ens-lyon.fr/redmine/projects/optnpath/wiki) program. NEB can be run using ASE or [VTST](https://theory.cm.utexas.edu/vtsttools/) scripts. Note: Unstable, bugs will be resolved soon.
+5. COHP: Performs Crystal Orbital Hamilton Population analysis on the system using [LOBSTER](http://www.cohp.de/). **Note**: Currently, only non spin polarized calculations are supported.
+6. NEB: Performs Nudged Elastic Band calculation to obtain transition state between initial and final images. Intermediate images can be generated using either linear interpolation or [Opt'n Path](http://forge.cbp.ens-lyon.fr/redmine/projects/optnpath/wiki) program. NEB can be run using ASE or [VTST](https://theory.cm.utexas.edu/vtsttools/) scripts. **Note**: Unstable, bugs will be resolved soon.
 7. frequency: Performs vibrational analysis on the system using VASP or ASE. Use ASE for calculations involving large systems as it supports a parallel scheme. Note: analysis method does not work for a VASP frequency calculation, it will be implemented soon.
 8. surface_charging: Performs surface charging calculation using [VASPsol](https://github.com/henniggroup/VASPsol).
 9. gibbs_free_energy: Gives the gibbs free energy of the system. If surface_charging is used, the parabola fit is used to obtain the energy vs potential. If geo_opt is used, OUTCAR is used to obtain energy. The vibrational energy is obtained using the frequency class.  Note: Only works if ASE is used to run the frequency calculation. These energies can be used in [PyEnergyDiagrams](https://github.com/giacomomarchioro/PyEnergyDiagrams) to generate reaction pathways.

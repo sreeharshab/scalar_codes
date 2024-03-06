@@ -5,9 +5,9 @@ import numpy as np
 from statistics import mean
 from matplotlib import pyplot as plt
 from matplotlib import gridspec
+import ase
 from ase.io import read, write, Trajectory
 from ase.calculators.vasp import Vasp
-from ase.calculators.singlepoint import SinglePointCalculator as SPC
 from ase.calculators.vasp.create_input import float_keys, exp_keys, string_keys, int_keys, bool_keys, list_int_keys, list_bool_keys, list_float_keys, special_keys, dict_keys
 from ase.optimize import BFGS
 from ase.neighborlist import NeighborList, natural_cutoffs
@@ -32,7 +32,7 @@ def get_base_calc():
         lplane=True,
         lwave=False,
         lcharg=False,
-        ncore=16,
+        ncore=8,
         prec="Normal",
         encut=300,
         ediff=1e-6,
@@ -250,7 +250,10 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
                 atoms = opt_by_vasp(opt_levels, level)
             elif mode=="ase":
                 if os.path.exists(f"opt{level}.traj"):
-                    atoms = read(f"opt{level}.traj@-1")
+                    try:
+                        atoms = read(f"opt{level}.traj@-1")
+                    except ase.io.formats.UnknownFileTypeError:
+                        pass
                 atoms = opt_by_ase(atoms, opt_levels, level)
             
     return atoms
