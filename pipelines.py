@@ -940,6 +940,10 @@ class surface_charging:
         :return: Energy, Fermi energy and Fermi shift of the calculation
         :rtype: tuple
         """
+        class ParseError(Exception):
+            def __init__(self,message):
+                self.message = message
+
         with open("OUTCAR", "r") as f:
             outcar = f.readlines()
         outcar = "".join(outcar)
@@ -948,23 +952,17 @@ class surface_charging:
         try:
             e_pattern = re.compile(r'entropy=\s+-?\d+.\d+\s+energy\(sigma->0\)\s+=\s+(-?\d+\.\d+)')
             e = re.findall(e_pattern, outcar)[-1]
-            if e:
-                e = float(e)
-            else:
-                raise re.error("Energy not found in OUTCAR")
-        except re.error as error:
-            print(f"EnergyNotFoundError: {error}")
+            e = float(e)
+        except:
+            raise ParseError("Energy not found in OUTCAR")
         
         # Parsing the OUTCAR to get Fermi energy.
         try:
             e_fermi_pattern = re.compile(r'E-fermi\s+:\s+(\-\d+\.\d+)')
             e_fermi = re.findall(e_fermi_pattern, outcar)[-1]
-            if e_fermi:
-                e_fermi = float(e_fermi)
-            else:
-                raise re.error("Fermi energy not found in OUTCAR")
-        except re.error as error:
-            print(f"FermiEnergyNotFoundError: {error}")
+            e_fermi = float(e_fermi)
+        except:
+            raise ParseError("Fermi energy not found in OUTCAR")
         
         with open("vasp.out", "r") as f:
             vaspout = f.readlines()
@@ -972,14 +970,11 @@ class surface_charging:
 
         # Parsing vasp.out to get Fermi Shift.
         try:
-            fermi_shift_pattern = re.compile(r'FERMI_SHIFT\s+=\s+(\d+\.\d+)')
+            fermi_shift_pattern = re.compile(r"FERMI_SHIFT =\s+([\d.E-]+)")
             fermi_shift = re.findall(fermi_shift_pattern, vaspout)[-1]
-            if fermi_shift:
-                fermi_shift = float(fermi_shift)
-            else:
-                raise re.error("Fermi shift not found in vasp.out")
-        except re.error as error:
-            print(f"FermiShiftNotFoundError: {error}")
+            fermi_shift = float(fermi_shift)
+        except:
+            raise ParseError("Fermi shift not found in vasp.out")
         
         return e, e_fermi, fermi_shift
     
@@ -1044,10 +1039,16 @@ class surface_charging:
     def analysis(self):
         """Generates the energy vs potential plot.
         """
+        pwd = os.getcwd()
         PZC_nelect = self.get_PZC_nelect()
-        os.rename("PZC_calc", f"{PZC_nelect}")
-        self.plot_parabola(PZC_nelect)
-        os.rename(f"{PZC_nelect}", "PZC_calc")
+        try:
+            os.rename("PZC_calc", f"{PZC_nelect}")
+            self.plot_parabola(PZC_nelect)
+            os.rename(f"{PZC_nelect}", "PZC_calc")
+        except Exception as error:
+            os.chdir(pwd)
+            os.rename(f"{PZC_nelect}", "PZC_calc")
+            raise error
 
 class gibbs_free_energy:
     """Gives the gibbs free energy of the system. If surface_charging is used, the parabola fit is used to obtain the energy vs potential. If geo_opt is used, OUTCAR is used to obtain energy. The vibrational energy is obtained using the frequency class.  Note: Only works if ASE is used to run the frequency calculation.
