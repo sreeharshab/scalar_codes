@@ -647,9 +647,9 @@ class frequency:
         if thermo_style=="Harmonic":    
             thermo = HarmonicThermo(vib_energies = vib_energies, potentialenergy = potentialenergy)
             S = thermo.get_entropy(temperature)
-            H = thermo.get_helmholtz_energy(temperature)  
+            F = thermo.get_helmholtz_energy(temperature)  
             U = thermo.get_internal_energy(temperature)
-            return S,H,U
+            return S,F,U
         elif thermo_style=="IdealGas":
             assert pressure!=None, "pressure must be provided when mode is IdealGas"
             assert kwargs!=None, "geometry, symmetry number and spin must be provided when mode is IdealGas"
