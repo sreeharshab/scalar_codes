@@ -513,198 +513,6 @@ class COHP:
             )
             plt.close()
 
-class NEB:
-    """Performs Nudged Elastic Band calculation to obtain transition state between initial and final images. Intermediate images can be generated using either linear interpolation or Opt'n Path program. NEB can be run using ASE or VTST scripts.
-    """
-    def __init__(self, initial, final):
-        """Initializes the NEB class.
-
-        :param initial: Initial image
-        :type initial: Atoms object
-        :param final: Final image
-        :type final: Atoms object
-        """
-        self.initial = initial
-        self.final = final
-        self.images = None
-        self.kpts = initial.info["kpts"]
-        self.fmin = 1e-2
-
-    def interpolate(self, method="linear", nimage=8):
-        """Interpolates the initial and final images to generate intermediate images.
-
-        :param method: Method used to perform interpolation, "linear" for linear interpolation and "optnpath" for interpolation using the Opt'n Path program, defaults to "linear"
-        :type method: str, optional
-        :param nimage: Number of images (including inital and final), defaults to 8
-        :type nimage: int, optional
-        """
-        if method == "linear":
-            images = [self.initial]
-            images += [self.initial.copy() for i in range(nimage - 2)]
-            images += [self.final]
-
-            neb = NEB(images)
-            neb.interpolate()
-            self.images = images
-
-        elif method == "optnpath":
-            types = list(set(self.initial.get_chemical_symbols()))
-            template = {
-                "nat": len(self.initial),  # Number of atoms
-                "ngeomi": 2,  # Number of initial geometries
-                "ngeomf": nimage,  # Number of geometries along the path
-                "OptReac": False,  # Don't optimize the reactants ?
-                "OptProd": False,  # Don't optimize the products
-                "PathOnly": True,  # stop after generating the first path
-                "AtTypes": types,  # Type of the atoms
-                "coord": "mixed",
-                "maxcyc": 10,  # Launch 10 iterations
-                "IReparam": 1,  # re-distribution of points along the path every 1 iteration
-                "SMax": 0.1,  # Max displacement will be 0.1 a.u.
-                "ISpline": 5,  # Start using spline interpolation at iteration
-                "prog": "VaSP",
-            }  # optnpath refuse to work w/o prog tag
-            path_fname = "tmp_neb.path"
-            with open(path_fname, "w") as fhandle:
-                fhandle.write("&path\n")
-                for k in template.keys():
-                    val = template[k]
-                    if isinstance(val, bool):
-                        val = str(val)[0]
-                    elif isinstance(val, list):
-                        val = " ".join(['"' + str(line) + '"' for line in val])
-                    elif isinstance(val, str):
-                        val = "'" + val + "'"
-
-                    fhandle.write(f"  {k:s}={val},\n")
-                fhandle.write("/\n")
-
-            # a hack around the bug in optnpath:
-            # if selective dynamics not used optnpath
-            # will repeat 'Cartesian' in the output POSCARs
-            self.initial.set_constraint(FixAtoms([]))
-            self.final.set_constraint(FixAtoms([]))
-
-            # another hack around optnpath not recognizing
-            # POSCAR format with atom counts in VASP5
-            is_fname = "tmp_init.vasp"
-            fs_fname = "tmp_final.vasp"
-
-            write(is_fname, self.initial, vasp5=False, label="IS")
-            write(fs_fname, self.final, vasp5=False, label="FS")
-
-            os.system(f"cat {is_fname} {fs_fname} >> {path_fname}")
-            os.remove(is_fname)
-            os.remove(fs_fname)
-            optnpath = os.getenv("OPTNPATH")
-
-            subprocess.run([optnpath, path_fname], capture_output=True)
-            os.remove(path_fname)
-            os.remove("Path_cart.Ini")
-            os.remove("Path.Ini")
-            images = []
-            for iimage in range(nimage):
-                poscar_fname = f"POSCAR_{iimage:02d}"
-                images.append(read(poscar_fname))
-                os.remove(poscar_fname)
-
-            self.images = images
-
-    def write_input(self, backend):
-        self.backend = backend
-        if backend == "ase":
-            for image in self.images[1:-2]:
-                calc = get_base_calc()
-                calc.set(ibrion=-1, nsw=0, kpts=self.kpts)
-                image.calc = calc
-            print("no input needs to be written for ase backend")
-
-        elif backend == "vtst":
-            calc = get_base_calc()
-
-            calc.set(
-                ibrion=3, images=len(self.images), lclimb=True, ncore=4, kpar=2
-            )
-
-            calc.write_input(self.initial)
-
-            os.remove("POSCAR")
-            for iimage in range(len(self.images)):
-                workdir = f"{iimage:02d}"
-                if not os.path.exists(workdir):
-                    os.mkdir(workdir)
-                write(f"{workdir}/POSCAR", self.images[iimage])
-
-    def run(self):
-        if self.backend == "ase":
-
-            neb = NEB(self.images)
-            optimizer = BFGS(neb, trajectory="I2F.traj")
-            # todo: print out warnings about number of cpus and serial execution
-            optimizer.run(fmax=self.fmin)
-
-        elif self.backend == "vtst":
-            command = os.getenv("VASP_COMMAND")
-            # todo: check number of cpus makes sense
-            subprocess.run(command, capture_output=True, shell=True)
-
-    def monitor(self):
-        # read the OUTCARs and get their energies.
-
-        runs = []
-
-        # inefficient: reads long long OUTCARs twice
-        for iimage in range(1, len(self.images) - 1):
-            with open(f"{iimage:02d}/OUTCAR", "r") as fhandle:
-                lines = fhandle.readlines()
-                run = 0
-                for line in lines:
-                    if "  without" in line:
-                        run += 1
-                runs.append(run)
-
-        runs = min(runs)
-        nimages = len(self.images)
-        energies = np.zeros((runs, nimages))
-        for iimage in range(1, len(self.images) - 1):
-            run = 0
-            with open(f"{iimage:02d}/OUTCAR", "r") as fhandle:
-                lines = fhandle.readlines()
-                for line in lines:
-                    if "  without" in line:
-                        energies[run][iimage] = float(line.split()[-1])
-                        run += 1
-                        if run >= runs:
-                            break
-        energies[:, 0] = self.initial.get_potential_energy()
-        energies[:, -1] = self.final.get_potential_energy()
-
-        for ien, en in enumerate(energies):
-            plt.plot(en, label=str(ien))
-
-        plt.legend(loc="best")
-        plt.savefig("neb_progress.png")
-
-class Dimer:
-    def __init__(self, atoms):
-        calc = get_base_calc()
-        calc.set(
-            ibrion=3,
-            ediffg=-2e-2,
-            ediff=1e-8,
-            nsw=500,
-            ichain=2,
-            potim=0,
-            iopt=2,
-            kpar=4,
-            kpts=atoms.info["kpts"],
-        )
-        atoms.calc = calc
-        self.atoms = atoms
-
-    def run(self):
-        self.atoms.get_potential_energy()
-
 class frequency:
     """Performs vibrational analysis on the system using VASP or ASE. Use ASE for calculations involving large systems as it supports a parallel scheme.
     """
@@ -743,12 +551,12 @@ class frequency:
 
         :param kpts: KPOINTS used for the calculation, a list of KPOINTS are to be provided if mode is "vasp" and mode is "ase" with "serial" scheme, defaults to None
         :type kpts: list, optional
-        :param mode: _description_, defaults to "ase"
+        :param mode:  Mode used to run the frequency calculation, supports `mode="ase"` and `mode="vasp"`, defaults to "ase"
         :type mode: str, optional
-        :param scheme: _description_, defaults to None
-        :type scheme: _type_, optional
-        :param addnl_settings: _description_, defaults to None
-        :type addnl_settings: _type_, optional
+        :param scheme: Scheme used to run the frequency calculation, supports `scheme="serial"` and `scheme="parallel"` only when `mode="ase"`, defaults to None
+        :type scheme: str, optional
+        :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
+        :type addnl_settings: dict, optional
         """
         atoms = self.atoms
         calc = get_base_calc()
@@ -758,9 +566,9 @@ class frequency:
                 set_vasp_key(calc, key, addnl_settings[key])
 
         if mode == "vasp":
-            # avoid this on large structures, use ase instead
-            # ncore/npar unusable, leads to kpoint errors
-            # isym must be switched off, leading to large memory usage
+            # Avoid this on large structures, use mode="ase" instead.
+            # ncore/npar unusable, leads to kpoint errors.
+            # isym must be switched off, leading to large memory usage.
             assert kpts!=None, "kpts must be provided when mode is vasp"
             calc.set(
                 kpts=kpts,
@@ -785,6 +593,8 @@ class frequency:
                 vib.run()  # this will save json files
         
             elif scheme == "parallel":
+                assert os.path.exists("./freq.py"), "freq.py is required to perform parallel calculation, see examples for the structure of freq.py"
+                assert os.path.exists("./freq.sh"), "freq.sh is required to perform parallel calculation, see examples for the structure of freq.sh"
                 for indice in vib_indices:
                     os.mkdir(f"{indice}")
                     shutil.copyfile("./freq.py", f"./{indice}/freq.py")
@@ -795,40 +605,52 @@ class frequency:
                     subprocess.run(["sbatch", "freq.sh"])
                     os.chdir("../")
     
-    # todo: parse OUTCAR frequencies and modes for mode="vasp"
-    def analysis(self, mode, potentialenergy, temperature, pressure=None, copy_json_files=None, **kwargs):
-        """Performs analysis after the frequency calculation. Note: This method only works for `mode="ase"`.
+    def analysis(self, mode, thermo_style, potentialenergy, temperature, pressure=None, copy_json_files=None, **kwargs):
+        """Performs analysis after the frequency calculation.
 
-        :param atoms: Atoms used for the frequency calculation
-        :type atoms: Atoms object
+        :param mode: Mode used to run the frequency calculation, supports `mode="ase"` and `mode="vasp"`, defaults to "ase"
+        :type mode: str
+        :param thermo_style: The class used from the thermochemistry module of ASE, for surfaces, use `thermo_style="Harmonic"` and for gases, use `thermo_style="IdealGas"`
+        :type thermo_style: str
         :param potentialenergy: Potential energy of the system from geo_opt calculation
         :type potentialenergy: float
         :param temperature: Temperature at which the analysis is performed
         :type temperature: float
         :param pressure: Pressure at which the analysis is performed, defaults to None
         :type pressure: float, optional
-        :param copy_json_files: Copies .json files from invidual atom's index directory to a common vib folder, True only if `scheme="parallel"`, defaults to None
+        :param copy_json_files: Copies .json files from invidual atom's index directory to a common vib folder, True only if `scheme="parallel"` in the run method, defaults to None
         :type copy_json_files: bool, optional
+        :return: _description_
+        :rtype: _type_
         """
         atoms = self.atoms
-        vib_indices = self.vib_indices
-        vib = Vibrations(atoms, indices=vib_indices)
-        if copy_json_files==True:
-            for indice in vib_indices:
-                os.chdir(f"./{indice}")
-                copy_tree("./vib", "../vib")
-                os.chdir("../")
-        vib.run()
-        vib.summary(log="vibrations.txt")
-        vib_energies = vib.get_energies()
-        vib_energies = np.array([i for i in vib_energies if i.imag==0])
-        if mode=="Harmonic":    
+        if mode=="ase":
+            vib_indices = self.vib_indices
+            vib = Vibrations(atoms, indices=vib_indices)
+            if copy_json_files==True:
+                for indice in vib_indices:
+                    os.chdir(f"./{indice}")
+                    copy_tree("./vib", "../vib")
+                    os.chdir("../")
+            vib.run()
+            vib.summary(log="vibrations.txt")
+            vib_energies = vib.get_energies()
+            vib_energies = np.array([i for i in vib_energies if i.imag==0])
+        elif mode=="vasp":
+            with open("OUTCAR", "r") as f:
+                vib_energies = np.array([])
+                for line in f:
+                    match = re.search(r'\b\d+\.\d+\s+meV\b', line)
+                    if match and "f/i" not in line:
+                        value = float(match.group().split()[0])*(10**-3)
+                        vib_energies = np.append(vib_energies,value)
+        if thermo_style=="Harmonic":    
             thermo = HarmonicThermo(vib_energies = vib_energies, potentialenergy = potentialenergy)
             S = thermo.get_entropy(temperature)
             H = thermo.get_helmholtz_energy(temperature)  
             U = thermo.get_internal_energy(temperature)
             return S,H,U
-        if mode=="IdealGas":
+        elif thermo_style=="IdealGas":
             assert pressure!=None, "pressure must be provided when mode is IdealGas"
             assert kwargs!=None, "geometry, symmetry number and spin must be provided when mode is IdealGas"
             thermo = IdealGasThermo(vib_energies = vib_energies, potentialenergy = potentialenergy, atoms = atoms, **kwargs)
@@ -1070,9 +892,12 @@ class gibbs_free_energy:
         calc_root_dir = self.calc_root_dir
         pwd = os.getcwd()
         os.chdir(f"{calc_root_dir}")
-        assert os.path.exists("analysis.py"), "analysis.py not found in the root directory."
-        subprocess.run(["python", "analysis.py"])
-        assert os.path.exists("fit.txt"), "fit.txt not found in the root directory, check your surface charging calculation for completion."
+        if os.path.exists("fit.txt"):
+            pass
+        else:
+            assert os.path.exists("analysis.py"), "analysis.py not found in the root directory."
+            subprocess.run(["python", "analysis.py"])
+            assert os.path.exists("fit.txt"), "fit.txt not found in the root directory, check your surface charging calculation for completion."
         with open("fit.txt", "r") as f:
             lines = f.readlines()
         lines = np.array([float(line) for line in lines])
@@ -1117,14 +942,32 @@ class gibbs_free_energy:
         calc_root_dir = self.calc_root_dir
         pwd = os.getcwd()
         os.chdir(f"{calc_root_dir}/frequency")
-        assert os.path.exists("analysis.py"), "analysis.py not found in the frequency directory."
-        if pressure is None:
-            subprocess.run(["python", "analysis.py", "--temperature", f"{temperature}"])
-        elif pressure is not None:
-            subprocess.run(["python", "analysis.py", "--temperature", f"{temperature}", "--pressure", f"{pressure}"])
-        assert os.path.exists("Gibbs.txt"), "Gibbs.txt not found in the frequency directory, check your frequency calculation for completion."
+        # Caching to prevent frequency analysis when Gibbs.txt for a specific temperature and pressure already exists.
+        if os.path.exists("parameters.txt"):
+            with open("parameters.txt", "r") as f:
+                lines = f.readlines()
+                old_temperature = float(lines[0])
+                try:
+                    old_pressure = float(lines[1])
+                except ValueError or TypeError or IndexError:
+                    old_pressure = None
+        else:
+            old_temperature = None
+            old_pressure = None
+        if os.path.exists("Gibbs.txt") and temperature==old_temperature and pressure==old_pressure:
+            pass
+        else:
+            assert os.path.exists("analysis.py"), "analysis.py not found in the frequency directory."
+            if pressure is None:
+                subprocess.run(["python", "analysis.py", "--temperature", f"{temperature}"], check=True)
+            elif pressure is not None:
+                subprocess.run(["python", "analysis.py", "--temperature", f"{temperature}", "--pressure", f"{pressure}"], check=True)
+            assert os.path.exists("Gibbs.txt"), "Gibbs.txt not found in the frequency directory, check your frequency calculation for completion."
         with open("Gibbs.txt", "r") as f:
             G = float(f.read())
+        with open("parameters.txt", "w") as f:
+            f.write(f"{temperature}\n")
+            f.write(f"{pressure}")
         os.chdir(pwd)
         return G
     
@@ -1159,10 +1002,10 @@ def dos(atoms, kpts, addnl_settings=None):
     return atoms
     # todo: Plotting DOS
 
-def analyse_GCBH(save_data=None, energy_operation=None, label=None):
+def analyse_GCBH(save_data=True, energy_operation=None, label=None):
     """Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using catalapp.
 
-    :param save_data: Reads and saves data from the opt_folder, defaults to None
+    :param save_data: Reads and saves data from the opt_folder, defaults to True
     :type save_data: bool, optional
     :param energy_operation: Function which operates on energy data from opt_folder, example: `def energy_operation(e):return (e+2)` where e is the energy read from opt_folder, defaults to None
     :type energy_operation: function, optional
