@@ -792,9 +792,10 @@ class surface_charging:
 
         # Parsing vasp.out to get Fermi Shift.
         try:
-            fermi_shift_pattern = re.compile(r"FERMI_SHIFT =\s+([\d.E-]+)")
-            fermi_shift = re.findall(fermi_shift_pattern, vaspout)[-1]
-            fermi_shift = float(fermi_shift)
+            fermi_shift_pattern = re.compile(r"FERMI_SHIFT =\s+([\d.E+-]+)")
+            fermi_shift_array = re.findall(fermi_shift_pattern, vaspout)
+            fermi_shift_array = [float(i) for i in fermi_shift_array if float(i)!=0]
+            fermi_shift = fermi_shift_array[-1]
         except:
             raise ParseError("Fermi shift not found in vasp.out")
         
