@@ -575,8 +575,6 @@ class frequency:
                 ibrion=5,
                 potim=0.015,
                 nsw=500,
-                ncore=None,
-                npar=None,
                 isym=0,
             )
             atoms.calc = calc
@@ -650,7 +648,14 @@ class frequency:
             F = thermo.get_helmholtz_energy(temperature)  
             U = thermo.get_internal_energy(temperature)
             return S,F,U
-        elif thermo_style=="IdealGas":
+        elif thermo_style=="IdealGas":    
+            # In older versions of ASE, the vib_energies array is not sorted internally in the IdealGas class.
+            # The first 5 (if geometry==linear, only 3N-5 modes should be considered) or 
+            # 6 (if geometry==nonlinear, only 3N-6 modes should be considered) frequency modes are not considered towards the calculation of gibbs free energy. 
+            # If the frequency modes were obtained from external source (and not from ASE's Vibration class which provides sorted vib_energies), 
+            # there is a good chance that the vib_energies is not sorted, and important modes are removed from the analysis.
+            # Sorting is done here to prevent this!
+            vib_energies = np.sort(vib_energies)
             assert pressure!=None, "pressure must be provided when mode is IdealGas"
             assert kwargs!=None, "geometry, symmetry number and spin must be provided when mode is IdealGas"
             thermo = IdealGasThermo(vib_energies = vib_energies, potentialenergy = potentialenergy, atoms = atoms, **kwargs)
