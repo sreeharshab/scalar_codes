@@ -806,11 +806,13 @@ class surface_charging:
         
         return e, e_fermi, fermi_shift
     
-    def plot_parabola(self,PZC_nelect):
+    def plot_parabola(self, PZC_nelect, custom_nelect=None):
         """Generates the energy vs potential plot.
 
         :param PZC_nelect: Number of electrons at PZC
         :type PZC_nelect: float
+        :param custom_nelect: List of custom nelects, defaults to None
+        :type custom_nelect: list, optional
         """
         def isfloat(value):
             try:
@@ -818,9 +820,12 @@ class surface_charging:
                 return True
             except ValueError:
                 return False
-        subdirs = [f.path for f in os.scandir("./") if f.is_dir()]
-        subdirs = map(lambda x:re.sub('./', '', x), subdirs)
-        subdirs = [subdir for subdir in subdirs if isfloat(subdir)]
+        if custom_nelect==None:
+            subdirs = [f.path for f in os.scandir("./") if f.is_dir()]
+            subdirs = map(lambda x:re.sub('./', '', x), subdirs)
+            subdirs = [subdir for subdir in subdirs if isfloat(subdir)]
+        elif custom_nelect:
+            subdirs = custom_nelect
 
         n_elects, es, e_fermis, fermi_shifts = np.array([]), np.array([]), np.array([]), np.array([])
         for dir in subdirs:
@@ -860,18 +865,20 @@ class surface_charging:
         plt.title('a={}\nb={}\nc={}'.format(*parameter))
         plt.scatter(Lipots, gs, label='original data', color='indigo')
         plt.plot(x, y, label='fitted', color='indigo')
-        get_plot_settings(fig,"U vs Li+/Li (V)","G (eV)","g-pot.png","upper right")
+        for i, txt in enumerate(n_elects):
+            plt.annotate(txt, (Lipots[i]+Lipots.max()/50, gs[i]))
+        get_plot_settings(fig,"U vs Li+/Li (V)","G (eV)","g-pot.png","upper left")
         
         return fig
     
-    def analysis(self):
+    def analysis(self, custom_nelect=None):
         """Generates the energy vs potential plot.
         """
         pwd = os.getcwd()
         PZC_nelect = self.get_PZC_nelect()
         try:
             os.rename("PZC_calc", f"{PZC_nelect}")
-            self.plot_parabola(PZC_nelect)
+            self.plot_parabola(PZC_nelect, custom_nelect=custom_nelect)
             os.rename(f"{PZC_nelect}", "PZC_calc")
         except Exception as error:
             os.chdir(pwd)
