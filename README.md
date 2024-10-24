@@ -12,7 +12,7 @@ Exit your `.bashrc` and source it as follows:
 ```
 source .bashrc
 ```
-**Note**: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/), [SciPy](https://scipy.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
+**Note**: Ensure that you have [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/), [VASPKIT](https://vaspkit.com/index.html), [Numpy](https://numpy.org/), [Pandas](https://pandas.pydata.org/), [SciPy](https://scipy.org/) and [Matplotlib](https://matplotlib.org/) installed in your machine!
 
 **Optional**: scalar_codes can be used as a package if `/path_to_home_directory/` is appended to `PYTHONPATH`.
 
@@ -43,11 +43,11 @@ You can change the defaults and add additional settings using `opt_levels` param
 2. axis_opt: Optimizes the size of the required axis of the simulation cell.
 3. geo_opt: Performs geometry optimization on the system using inbuilt [VASP](https://www.vasp.at/wiki/index.php/The_VASP_Manual) optimizer (IBRION=2) or [ASE](https://wiki.fysik.dtu.dk/ase/)'s BFGS optimizer.
 4. bader: Performs [bader charge analysis](https://theory.cm.utexas.edu/henkelman/code/bader/) on the system. Charges can be viewed in ACF.dat file or using ase gui and choosing the Initial Charges label in the view tab.
-5. COHP: Performs Crystal Orbital Hamilton Population analysis on the system using [LOBSTER](http://www.cohp.de/). **Note**: Currently, only non spin polarized calculations are supported.
+5. COHP: Performs Crystal Orbital Hamilton Population analysis on the system using [LOBSTER](http://www.cohp.de/).
 6. frequency: Performs vibrational analysis on the system using VASP or ASE. Use ASE for calculations involving large systems as it supports a parallel scheme.
 7. surface_charging: Performs surface charging calculation using [VASPsol](https://github.com/henniggroup/VASPsol).
 8. gibbs_free_energy: Gives the gibbs free energy of the system. If surface_charging is used, the parabola fit is used to obtain the energy vs potential. If geo_opt is used, OUTCAR is used to obtain energy. The vibrational energy is obtained using the frequency class. These energies can be used in [PyEnergyDiagrams](https://github.com/giacomomarchioro/PyEnergyDiagrams) to generate reaction pathways.
-9. dos: Performs a DOS calculation. Note: The code for visualizing DOS will be implemented soon.
+9. DOS: Performs a DOS calculation. Note: [VASPKIT](https://vaspkit.com/index.html) is required to perform post calculation analysis! Work in progress to make it independent from VASPKIT.
 10. analyse_GCBH: Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using [catalapp](https://github.com/GengSS/catalapp?tab=readme-ov-file).
 11. get_neighbor_list: Provides the neigbor list for the system. Output is provided in Neighbor_List.txt file. Neighbors of each atom, their positions and coordination numbers of each atom are provided based on ASE's natural cutoff distances.
 12. check_run_completion: Checks for completion of a VASP job at the provided location.

@@ -21,6 +21,7 @@ import pandas as pd
 import re
 from distutils.dir_util import copy_tree
 from scipy.optimize import curve_fit
+import pexpect
 
 
 """VASP related codes using ASE"""
@@ -342,7 +343,7 @@ class COHP:
     def __init__(self, atoms, bonds, lobsterin_template=None):
         """Initializes the COHP class.
 
-        :param atoms: Atoms on which COHP analysis is performed.
+        :param atoms: Atoms on which COHP analysis is performed
         :type atoms: Atoms object
         :param bonds: List of lists, where each list contains the indexes of two bonding atoms, example: [[0,1],[1,2],[2,3]]
         :type bonds: list
@@ -353,8 +354,7 @@ class COHP:
         self.bonds = bonds
 
         if lobsterin_template:
-            with open(lobsterin_template) as fhandle:
-                template = fhandle.readlines()
+            template = lobsterin_template
         else:
             template = [
                 "COHPstartEnergy  -22\n",
@@ -385,7 +385,7 @@ class COHP:
         nelect = 0
         for atom in atoms:
             nelect = nelect + valence_electrons[atom.symbol]
-        calc.set(nbands=nelect + 20)  # giving 20 empty bands. May require more since the number of bands can be > number of basis functions, but not less!
+        calc.set(nbands=nelect + 20)  # Giving 20 empty bands. May require more since the number of bands can be > number of basis functions, but not less!
 
         atoms.calc = calc
         atoms.get_potential_energy()
@@ -421,9 +421,6 @@ class COHP:
         :return: None
         :rtype: None
         """
-        # modded from https://zhuanlan.zhihu.com/p/470592188
-        # lots of magic numbers, keep until it breaks down
-
         def read_COHP(fn):
             raw = open(fn).readlines()
             raw = [line for line in raw if "No" not in line][3:]
@@ -440,32 +437,59 @@ class COHP:
             eval(line.split()[-1])
             for line in open("./ICOHPLIST.lobster").readlines()[1:]
         ]
+        icohp_ef = [i for index,i in enumerate(icohp_ef) if index%2==0]
 
-        data_len = (data_cohp.shape[1] - 3) // 2
+        """
+        COHPCAR.lobster has the following format (check LOBSTER documentation):
+        If ISPIN=1:
+        Energy   (pCOHP averaged over all bonds)   (IpCOHP averaged over all bonds)   (pCOHP of first bond)   (IpCOHP of first bond)   ...
+        ...      ...                               ...                                ...                     ...
+        If ISPIN=2:
+        Energy   (Spin up pCOHP averaged over all bonds)   (Spin up IpCOHP averaged over all bonds)   (Spin up pCOHP of first bond)   (Spin up IpCOHP of first bond)   ...   (Spin down pCOHP averaged over all bonds)   (Spin down IpCOHP averaged over all bonds)   (Spin down pCOHP of first bond)   (Spin down IpCOHP of first bond)   ...
+        ...      ...                                       ...                                        ...                             ...                                    ...                                         ...                                          ...                               ...
+        """
         assert (
-            len(labels_cohp) == data_len
+            len(labels_cohp) == (data_cohp.shape[1]-3)//2 or len(labels_cohp) == (data_cohp.shape[1]-5)//4
         ), "Inconsistent bonds definition and COHPCAR.lobster"
+        if len(labels_cohp) == (data_cohp.shape[1]-3)//2:
+            spin = 1
+            data_len = (data_cohp.shape[1]-3)//2
+        elif len(labels_cohp) == (data_cohp.shape[1]-5)//4:
+            spin = 2
+            data_len = ((data_cohp.shape[1]-5)//4)*2
+            labels_cohp = [i for label in labels_cohp for i in (label, label)]
+
         for i in range(data_len):
             fig, ax1 = plt.subplots(figsize=[2.4, 4.8])
+            if spin==1:
+                cohp_column = i*2+3
+                icohp_column = i*2+4
+            elif spin==2:
+                if i >= data_len//2:
+                    i = i+1
+                cohp_column = i*2+3
+                icohp_column = i*2+4
+                if i >= data_len//2:
+                    i = i-1
             ax1.plot(
-                -data_cohp[:, i * 2 + 3],
+                -data_cohp[:, cohp_column],
                 data_cohp[:, 0],
                 color="k",
                 label=labels_cohp[i],
             )
             ax1.fill_betweenx(
                 data_cohp[:, 0],
-                -data_cohp[:, i * 2 + 3],
+                -data_cohp[:, cohp_column],
                 0,
-                where=-data_cohp[:, i * 2 + 3] >= 0,
+                where=-data_cohp[:, cohp_column] >= 0,
                 facecolor="green",
                 alpha=0.2,
             )
             ax1.fill_betweenx(
                 data_cohp[:, 0],
-                -data_cohp[:, i * 2 + 3],
+                -data_cohp[:, cohp_column],
                 0,
-                where=-data_cohp[:, i * 2 + 3] <= 0,
+                where=-data_cohp[:, cohp_column] <= 0,
                 facecolor="red",
                 alpha=0.2,
             )
@@ -477,7 +501,7 @@ class COHP:
             ax1.tick_params(axis="x", colors="k")
             # ICOHP
             ax2 = ax1.twiny()
-            ax2.plot(-data_cohp[:, i * 2 + 4], data_cohp[:, 0], color="grey", linestyle="dashdot")
+            ax2.plot(-data_cohp[:, icohp_column], data_cohp[:, 0], color="grey", linestyle="dashdot")
             ax2.set_ylim(icohp_ylim)  # [-10, 6]
             ax2.set_xlim(icohp_xlim)  # [-0.01, 1.5]
             ax2.set_xlabel("-ICOHP (eV)", color="grey", fontsize="large")
@@ -505,8 +529,14 @@ class COHP:
                 va="bottom",
                 color="black",
             )
+            if spin==1:
+                fig_name = f"{i+1}"
+            elif spin==2 and i<data_len//2:
+                fig_name = f"{i//2+1}-up"
+            elif spin==2 and i>=data_len//2:
+                fig_name = f"{i//2+1}-down"
             fig.savefig(
-                f"cohp-{i+1}.png",
+                f"cohp-{fig_name}.png",
                 dpi=500,
                 bbox_inches="tight",
                 transparent=True,
@@ -813,6 +843,8 @@ class surface_charging:
         :type PZC_nelect: float
         :param custom_nelect: List of custom nelects, defaults to None
         :type custom_nelect: list, optional
+        :return: Figure object to edit the figure
+        :rtype: Matplotlib figure object
         """
         def isfloat(value):
             try:
@@ -1000,20 +1032,91 @@ class gibbs_free_energy:
         """
         return self.get_energy(potential=potential, outcar_location=outcar_location)+ self.get_vib_energy(temperature, pressure=pressure)
 
-def dos(atoms, kpts, addnl_settings=None):
-    calc = get_base_calc()
-    if addnl_settings!=None:
-        for key in addnl_settings.keys():
-            set_vasp_key(calc, key, addnl_settings[key])
-    set_vasp_key(calc, 'ismear', -5)
-    set_vasp_key(calc, 'icharg', 11)    # Obtain CHGCAR from single point calculation.
-    set_vasp_key(calc, 'lorbit', 11)
-    set_vasp_key(calc, 'nedos', 1000)   # It should be between 1000 to 3000 based on the accuracy required.
-    set_vasp_key(calc, 'kpts', kpts)
-    atoms.set_calculator(calc)
-    atoms.get_potential_energy()
-    return atoms
-    # todo: Plotting DOS
+class DOS:
+    def __init__(self):
+        pass
+
+    def run(self, atoms, kpts, addnl_settings=None):
+        """
+
+        :param atoms: Atoms used for DOS calculation
+        :type atoms: Atoms object
+        :param kpts: KPOINTS used for the calculation
+        :type kpts: list
+        :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
+        :type addnl_settings: dict, optional
+        """
+        # Single point calculation to obtain CHGCAR.
+        calc = get_base_calc()
+        calc.set(ibrion=-1, nsw=0, kpts=kpts, lwave=True, lcharg=True)
+        if addnl_settings!=None:
+            for key in addnl_settings.keys():
+                set_vasp_key(calc, key, addnl_settings[key])
+        atoms.calc = calc
+        atoms.get_potential_energy()
+        os.rename("vasp.out", "spc.out")
+        
+        calc = get_base_calc()
+        calc.set(ismear=-5, icharg=11, lorbit=11, nedos=3000, ibrion=-1, nsw=0, emax=15, emin=-20, kpts=kpts)
+        atoms.set_calculator(calc)
+        atoms.get_potential_energy()
+    
+    def plot(self):
+        command = "vaspkit"
+        child = pexpect.spawn(command)
+        child.logfile = open("output.log", "wb")
+        child.sendline("111")
+        child.expect(pexpect.EOF)
+        child.logfile.close()
+        assert os.path.exists("TDOS.dat"), "DOS calculation is incomplete. Please check your calculation!"
+        f = open("TDOS.dat","r")
+        DOS = np.array([])
+        DOS_down = np.array([])
+        energy = np.array([])
+        for line in f:
+            if line.strip() == '#Energy        TDOS':
+                spin=1
+                continue
+            elif line.strip() == "#Energy        TDOS-UP        TDOS-DOWN":
+                spin=2
+                continue
+            values = line.split()
+            energy = np.append(energy, float(values[0]))
+            DOS = np.append(DOS, float(values[1]))
+            if spin==2:
+                DOS_down = np.append(DOS_down, -float(values[2]))
+        if spin==1:
+            fig = plt.figure(dpi = 200, figsize=(6.5,4.5))
+            plt.plot(energy, DOS, color="darkcyan")
+            get_plot_settings(fig, x_label="$E$ - $E_F$", y_label="Density of States", fig_name="TDOS.png")
+        elif spin==2:
+            fig = plt.figure(dpi = 200, figsize=(6.5,4.5))
+            plt.plot(energy, DOS, color="darkcyan")
+            get_plot_settings(fig, x_label="$E$ - $E_F$", y_label="Density of States", fig_name="TDOS_up.png")
+            fig = plt.figure(dpi = 200, figsize=(6.5,4.5))
+            plt.plot(energy, DOS_down, color="darkcyan")
+            get_plot_settings(fig, x_label="$E$ - $E_F$", y_label="Density of States", fig_name="TDOS_down.png")
+
+    def get_band_centers(self):
+        # band centers are in reference to the fermi level.
+        command = "vaspkit"
+        child = pexpect.spawn(command)
+        child.logfile = open("output.log", "wb")
+        child.sendline("503")
+        child.sendline("1")
+        child.sendline("n")
+        child.sendline("1")
+        child.sendline("all")
+        child.expect(pexpect.EOF)
+        child.logfile.close()
+        assert os.path.exists("BAND_CENTER"), "DOS calculation is incomplete. Please check your calculation!"
+        with open("BAND_CENTER","r",encoding="latin-1") as file:
+            for line in file:
+                if line.startswith("#Average"):
+                    values_line = next(file)
+                    band_centers = values_line.split()
+                    band_centers = [float(band_center) for band_center in band_centers]
+                    return band_centers
 
 def analyse_GCBH(save_data=True, energy_operation=None, label=None):
     """Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using catalapp.
@@ -1109,7 +1212,7 @@ def get_neighbor_list(atoms):
         for i, offset in zip(indices, offsets):
             pos = atoms.positions[i] + offset @ atoms.get_cell()    # Code to account for periodic boundary condition. Offset list consists something like [0,1,0] and offset@atoms.get_cell() gives [0,7.73277,0] where 7.73277 is the b vector length.
             dist = ((atoms[r].x - pos[0])**2 + (atoms[r].y - pos[1])**2 + (atoms[r].z - pos[2])**2)**(1/2)
-            f.write("{:<10} {:<10} {:<38} {:<10}\n".format(str(i), str(atoms[i].symbol), str(pos), str(dist)))
+            f.write("{:<10} {:<10} {:<38} {:<10}\n".format(str(i), str(atoms[i].symbol), str(pos), str(round(dist,3))))
     # Printing coordination number for all atoms
     f.write("\nCoordination numbers for all the atoms: \n")
     for i in range(len(atoms)):
