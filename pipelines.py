@@ -1057,6 +1057,9 @@ class DOS:
         os.rename("vasp.out", "spc.out")
         
         calc = get_base_calc()
+        if addnl_settings!=None:
+            for key in addnl_settings.keys():
+                set_vasp_key(calc, key, addnl_settings[key])
         calc.set(ismear=-5, icharg=11, lorbit=11, nedos=3000, ibrion=-1, nsw=0, emax=15, emin=-20, kpts=kpts)
         atoms.set_calculator(calc)
         atoms.get_potential_energy()
