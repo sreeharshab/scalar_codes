@@ -497,6 +497,7 @@ class COHP:
             ax1.set_ylim(cohp_ylim)
             ax1.set_xlim(cohp_xlim)
             ax1.set_xlabel("-COHP (eV)", color="k", fontsize="large")
+            plt.rcParams["text.usetex"] = True
             ax1.set_ylabel("$E-E_\mathrm{F}$ (eV)", fontsize="large")
             ax1.tick_params(axis="x", colors="k")
             # ICOHP
@@ -1066,7 +1067,7 @@ class DOS:
     
     def plot(self):
         command = "vaspkit"
-        child = pexpect.spawn(command)
+        child = pexpect.spawn(command, timeout=120)
         child.logfile = open("output.log", "wb")
         child.sendline("111")
         child.expect(pexpect.EOF)
@@ -1103,7 +1104,7 @@ class DOS:
     def get_band_centers(self):
         # band centers are in reference to the fermi level.
         command = "vaspkit"
-        child = pexpect.spawn(command)
+        child = pexpect.spawn(command, timeout=120)
         child.logfile = open("output.log", "wb")
         child.sendline("503")
         child.sendline("1")
@@ -1120,6 +1121,20 @@ class DOS:
                     band_centers = values_line.split()
                     band_centers = [float(band_center) for band_center in band_centers]
                     return band_centers
+    
+    def get_band_gap(self):
+        command = "vaspkit"
+        child = pexpect.spawn(command, timeout=120)
+        child.logfile = open("output.log", "wb")
+        child.sendline("911")
+        child.expect(pexpect.EOF)
+        child.logfile.close()
+        with open("output.log","r") as file:
+            content = file.read()
+            match = re.search(r"Band Gap \(eV\):\s+\S+\s+\S+\s+([\d.]+)", content)
+            assert match, "DOS calculation is incomplete. Please check your calculation!"
+            band_gap = float(match.group(1))
+        return band_gap
 
 def analyse_GCBH(save_data=True, energy_operation=None, label=None):
     """Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using catalapp.
