@@ -47,7 +47,7 @@ You can change the defaults and add additional settings using `opt_levels` param
 6. frequency: Performs vibrational analysis on the system using VASP or ASE. Use ASE for calculations involving large systems as it supports a parallel scheme.
 7. surface_charging: Performs surface charging calculation using [VASPsol](https://github.com/henniggroup/VASPsol).
 8. gibbs_free_energy: Gives the gibbs free energy of the system. If surface_charging is used, the parabola fit is used to obtain the energy vs potential. If geo_opt is used, OUTCAR is used to obtain energy. The vibrational energy is obtained using the frequency class. These energies can be used in [PyEnergyDiagrams](https://github.com/giacomomarchioro/PyEnergyDiagrams) to generate reaction pathways.
-9. DOS: Performs a DOS calculation. Note: [VASPKIT](https://vaspkit.com/index.html) is required to perform post calculation analysis! Work in progress to make it independent from VASPKIT.
+9. DOS: Performs a DOS calculation and parses the DOSCAR to get total and projected DOS.
 10. analyse_GCBH: Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using [catalapp](https://github.com/GengSS/catalapp?tab=readme-ov-file).
 11. get_neighbor_list: Provides the neigbor list for the system. Output is provided in Neighbor_List.txt file. Neighbors of each atom, their positions and coordination numbers of each atom are provided based on ASE's natural cutoff distances.
 12. check_run_completion: Checks for completion of a VASP job at the provided location.

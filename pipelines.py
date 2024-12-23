@@ -259,7 +259,62 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
             
     return atoms
 
-def bader(atoms, kpts, valence_electrons, addnl_settings=None, restart=None):
+def get_valence_electrons(atoms=None, addnl_settings=None):
+    valence_electrons = {}
+    potcar_folder = os.getenv("VASP_PP_PATH")
+    def get_potcar_subfolder(settings):
+        if settings["gga"]==None:
+            potcar_subfolder = "potpaw"
+        elif settings["gga"]=="PE":
+            potcar_subfolder = "potpaw_PBE"
+        elif settings["gga"]=="91":
+            potcar_subfolder = "potpaw_GGA"
+        return potcar_subfolder
+    if potcar_folder is not None and not os.path.exists("POTCAR"):
+        formula = str(atoms.symbols)
+        elements = re.findall(r'([A-Z][a-z]?)\d*', formula)
+        if addnl_settings is not None:
+            if "setups" in addnl_settings:
+                setups = addnl_settings["setups"]
+                keys = list(setups.keys())
+            else:
+                keys = None
+            base_calc = get_base_calc()
+            if "gga" in base_calc.parameters and "gga" not in addnl_settings:
+                potcar_subfolder = get_potcar_subfolder(base_calc.parameters)
+            elif "gga" in addnl_settings:
+                potcar_subfolder = get_potcar_subfolder(addnl_settings)
+        elif addnl_settings is None:
+            potcar_subfolder = "potpaw_PBE"
+            keys = None
+        f = open("POTCAR","w")
+        cwd = os.getcwd()
+        os.chdir(f"{potcar_folder}"+f"/{potcar_subfolder}")
+        for element in elements:
+            if keys is not None and element in keys:
+                os.chdir(f"{element}"+f"{setups[element]}")
+            else:
+                os.chdir(element)
+            temp_f = open("POTCAR", "r")
+            f.write(temp_f.read())
+            os.chdir("../")
+        os.chdir(cwd)
+        f.close()
+    f = open("POTCAR", "r")
+    lines = f.readlines()
+    search_str = lines[0].split()[0]
+    print(search_str)
+    for i,line in enumerate(lines):
+        if search_str in line and not any(excluded in line for excluded in ["TITEL", "LPAW", "radial sets"]):
+            match = re.search(fr"{search_str}\s+([A-Z][a-z]?)", line)
+            next_line = lines[i+1]
+            nelect = float(next_line.split()[0])
+        if match:
+            element = match.group(1)
+        valence_electrons[element] = nelect
+    return valence_electrons
+
+def bader(atoms, kpts, valence_electrons=None, addnl_settings=None, restart=None):
     """Performs bader charge analysis on the system. Charges can be viewed in ACF.dat file or using ase gui and choosing the Initial Charges label in the view tab.
 
     :param atoms: Atoms for which charge should be determined
@@ -273,13 +328,12 @@ def bader(atoms, kpts, valence_electrons, addnl_settings=None, restart=None):
     """
     def run_vasp(atoms):
         calc = get_base_calc()
-        
-        calc.set(
-            ibrion=-1, nsw=0, lorbit=12, lcharg=True, laechg=True, kpts=kpts
-        )
         if addnl_settings!=None:
             for key in addnl_settings.keys():
                 set_vasp_key(calc, key, addnl_settings[key])
+        calc.set(
+            ibrion=-1, nsw=0, lorbit=12, lcharg=True, laechg=True, kpts=kpts
+        )
         atoms.calc = calc
         atoms.get_potential_energy()
         assert os.path.exists("AECCAR0"), "chgsum.pl: AECCAR0 not found"
@@ -301,6 +355,10 @@ def bader(atoms, kpts, valence_electrons, addnl_settings=None, restart=None):
         assert os.path.exists("ACF.dat"), "bader: ACF.dat not found"
 
     def read_bader(atoms):
+        if valence_electrons is None:
+            valence_electrons = get_valence_electrons()
+        else:
+            valence_electrons = valence_electrons
         latoms = len(atoms)
         df = pd.read_table(
             "ACF.dat",
@@ -365,7 +423,7 @@ class COHP:
 
         self.lobsterin_template = template
 
-    def run_vasp(self, kpts, valence_electrons, addnl_settings=None):
+    def run_vasp(self, kpts, valence_electrons=None, addnl_settings=None):
         """Runs a single point calculation on the system to generate the WAVECAR and CHGCAR files required for COHP analysis.
 
         :param kpts: KPOINTS used for the calculation
@@ -377,11 +435,15 @@ class COHP:
         """
         atoms = self.atoms
         calc = get_base_calc()
-        calc.set(ibrion=-1, nsw=0, isym=-1, prec="Accurate", kpts=kpts, lwave=True, lcharg=True)
         if addnl_settings!=None:
             for key in addnl_settings.keys():
                 set_vasp_key(calc, key, addnl_settings[key])
+        calc.set(ibrion=-1, nsw=0, isym=-1, prec="Accurate", kpts=kpts, lwave=True, lcharg=True)
 
+        if valence_electrons is None:
+            valence_electrons = get_valence_electrons(atoms=atoms, addnl_settings=addnl_settings)
+        else:
+            valence_electrons = valence_electrons
         nelect = 0
         for atom in atoms:
             nelect = nelect + valence_electrons[atom.symbol]
@@ -1035,9 +1097,15 @@ class gibbs_free_energy:
 
 class DOS:
     def __init__(self):
-        pass
+        self.is_spin_polarized = None
+        self.fermi_energy = None
+        self.energies = np.array([])
+        self.energies_wrt_fermi = np.array([])
+        self.total_dos_up = np.array([])
+        self.total_dos_down = np.array([])
+        self.partial_dos = None
 
-    def run(self, atoms, kpts, addnl_settings=None):
+    def run(self, atoms, kpts, valence_electrons=None, addnl_settings=None):
         """
 
         :param atoms: Atoms used for DOS calculation
@@ -1049,10 +1117,10 @@ class DOS:
         """
         # Single point calculation to obtain CHGCAR.
         calc = get_base_calc()
-        calc.set(ibrion=-1, nsw=0, kpts=kpts, lwave=True, lcharg=True)
         if addnl_settings!=None:
             for key in addnl_settings.keys():
                 set_vasp_key(calc, key, addnl_settings[key])
+        calc.set(ibrion=-1, nsw=0, kpts=kpts, lwave=True, lcharg=True)
         atoms.calc = calc
         atoms.get_potential_energy()
         os.rename("vasp.out", "spc.out")
@@ -1061,80 +1129,180 @@ class DOS:
         if addnl_settings!=None:
             for key in addnl_settings.keys():
                 set_vasp_key(calc, key, addnl_settings[key])
-        calc.set(ismear=-5, icharg=11, lorbit=11, nedos=3000, ibrion=-1, nsw=0, emax=15, emin=-20, kpts=kpts)
+        if valence_electrons is None:
+            valence_electrons = get_valence_electrons(atoms=atoms, addnl_settings=addnl_settings)
+        else:
+            valence_electrons = valence_electrons
+        nelect = 0
+        for atom in atoms:
+            nelect = nelect + valence_electrons[atom.symbol]
+        calc.set(ismear=-5, icharg=11, lorbit=11, nedos=3000, ibrion=-1, nsw=0, emax=15, emin=-20, kpts=kpts, nbands=nelect+20)
         atoms.set_calculator(calc)
         atoms.get_potential_energy()
     
-    def plot(self):
-        command = "vaspkit"
-        child = pexpect.spawn(command, timeout=120)
-        child.logfile = open("output.log", "wb")
-        child.sendline("111")
-        child.expect(pexpect.EOF)
-        child.logfile.close()
-        assert os.path.exists("TDOS.dat"), "DOS calculation is incomplete. Please check your calculation!"
-        f = open("TDOS.dat","r")
-        DOS = np.array([])
-        DOS_down = np.array([])
-        energy = np.array([])
-        for line in f:
-            if line.strip() == '#Energy        TDOS':
-                spin=1
-                continue
-            elif line.strip() == "#Energy        TDOS-UP        TDOS-DOWN":
-                spin=2
-                continue
-            values = line.split()
-            energy = np.append(energy, float(values[0]))
-            DOS = np.append(DOS, float(values[1]))
-            if spin==2:
-                DOS_down = np.append(DOS_down, -float(values[2]))
-        if spin==1:
-            fig = plt.figure(dpi = 200, figsize=(6.5,4.5))
-            plt.plot(energy, DOS, color="darkcyan")
-            get_plot_settings(fig, x_label="$E$ - $E_F$", y_label="Density of States", fig_name="TDOS.png")
-        elif spin==2:
-            fig = plt.figure(dpi = 200, figsize=(6.5,4.5))
-            plt.plot(energy, DOS, color="darkcyan")
-            get_plot_settings(fig, x_label="$E$ - $E_F$", y_label="Density of States", fig_name="TDOS_up.png")
-            fig = plt.figure(dpi = 200, figsize=(6.5,4.5))
-            plt.plot(energy, DOS_down, color="darkcyan")
-            get_plot_settings(fig, x_label="$E$ - $E_F$", y_label="Density of States", fig_name="TDOS_down.png")
+    def parse_doscar(self):
+        assert os.path.exists("DOSCAR"), "DOSCAR is missing. DOS calculation is incomplete. Please check your calculation!"
+        with open("DOSCAR", 'r') as f:
+            lines = f.readlines()
+        header = lines[5].split()
+        self.fermi_energy = float(header[3])
+        start = 6
+        nedos = int(header[2])
 
-    def get_band_centers(self):
-        # band centers are in reference to the fermi level.
-        command = "vaspkit"
-        child = pexpect.spawn(command, timeout=120)
-        child.logfile = open("output.log", "wb")
-        child.sendline("503")
-        child.sendline("1")
-        child.sendline("n")
-        child.sendline("1")
-        child.sendline("all")
-        child.expect(pexpect.EOF)
-        child.logfile.close()
-        assert os.path.exists("BAND_CENTER"), "DOS calculation is incomplete. Please check your calculation!"
-        with open("BAND_CENTER","r",encoding="latin-1") as file:
-            for line in file:
-                if line.startswith("#Average"):
-                    values_line = next(file)
-                    band_centers = values_line.split()
-                    band_centers = [float(band_center) for band_center in band_centers]
-                    return band_centers
+        for line in lines[start:start+nedos]:
+            values = np.array(list(map(float, line.split())))
+            self.energies = np.append(self.energies, values[0])
+            self.energies_wrt_fermi = self.energies - self.fermi_energy
+            if values.size==3:
+                self.is_spin_polarized = False
+                self.total_dos_up = np.append(self.total_dos_up, values[1])
+            elif values.size==5:
+                self.is_spin_polarized = True
+                self.total_dos_up = np.append(self.total_dos_up, values[1])
+                self.total_dos_down = np.append(self.total_dos_down, values[2])
+
+        if len(lines) > start+nedos:
+            self.partial_dos = []
+            n_atoms = int(lines[0].split()[0])
+            partial_start = start+nedos+1
+            for i in range(n_atoms):
+                atom_partial_dos = []
+                for line in lines[partial_start+i*nedos+i:partial_start+(i+1)*nedos+i]:
+                    values = list(map(float, line.split()))
+                    atom_partial_dos.append(values[1:])
+                self.partial_dos.append(atom_partial_dos)
+            self.partial_dos = np.array(self.partial_dos)
     
     def get_band_gap(self):
-        command = "vaspkit"
-        child = pexpect.spawn(command, timeout=120)
-        child.logfile = open("output.log", "wb")
-        child.sendline("911")
-        child.expect(pexpect.EOF)
-        child.logfile.close()
-        with open("output.log","r") as file:
-            content = file.read()
-            match = re.search(r"Band Gap \(eV\):\s+\S+\s+\S+\s+([\d.]+)", content)
-            assert match, "DOS calculation is incomplete. Please check your calculation!"
-            band_gap = float(match.group(1))
-        return band_gap
+        energies_below_fermi = self.energies[self.energies<self.fermi_energy]
+        energies_above_fermi = self.energies[self.energies>self.fermi_energy]
+        def gap_calc(dos_array):
+            gap_start = None
+            gap_end = None
+            for energy, dos in zip(energies_below_fermi[::-1], dos_array[self.energies < self.fermi_energy][::-1]):
+                if dos > 0:
+                    gap_start = energy
+                    break
+            for energy, dos in zip(energies_above_fermi, dos_array[self.energies > self.fermi_energy]):
+                if dos > 0:
+                    gap_end = energy
+                    break
+            if gap_start is not None and gap_end is not None:
+                return gap_end - gap_start
+            else:
+                return 0.0
+        if self.is_spin_polarized:
+            return min(gap_calc(self.total_dos_up),gap_calc(self.total_dos_down))
+        elif not self.is_spin_polarized:
+            return gap_calc(self.total_dos_up)
+    
+    def get_total_dos(self):
+        return self.total_dos_up, self.total_dos_down
+    
+    def get_orbital_projected_dos(self, orbital, dos_wrt_orb=None):
+        if dos_wrt_orb is None:
+            orbital_dos = sum(self.partial_dos)
+        elif dos_wrt_orb is not None:
+            orbital_dos = dos_wrt_orb
+        orb_proj_dos_up = np.array([])
+        orb_proj_dos_down = np.array([])
+        if self.is_spin_polarized:
+            if orbital=="s":
+                for row in orbital_dos:
+                    orb_proj_dos_up = np.append(orb_proj_dos_up, row[0])
+                    orb_proj_dos_down = np.append(orb_proj_dos_down, row[1])
+            if orbital=="p":
+                for row in orbital_dos:
+                    orb_proj_dos_up = np.append(orb_proj_dos_up, np.sum(row[2:8:2]))
+                    orb_proj_dos_down = np.append(orb_proj_dos_down, np.sum(row[3:8:2]))
+            if orbital=="d":
+                for row in orbital_dos:
+                    orb_proj_dos_up = np.append(orb_proj_dos_up, np.sum(row[8:18:2]))
+                    orb_proj_dos_down = np.append(orb_proj_dos_down, np.sum(row[9:18:2]))
+            if orbital=="f":
+                for row in orbital_dos:
+                    orb_proj_dos_up = np.append(orb_proj_dos_up, np.sum(row[18:32:2]))
+                    orb_proj_dos_down = np.append(orb_proj_dos_down, np.sum(row[19:32:2]))
+        elif not self.is_spin_polarized:
+            if orbital=="s":
+                for row in orbital_dos:
+                    orb_proj_dos_up = np.append(orb_proj_dos_up, row[0])
+            if orbital=="p":
+                for row in orbital_dos:
+                    orb_proj_dos_up = np.append(orb_proj_dos_up, np.sum(row[1:4:1]))
+            if orbital=="d":
+                for row in orbital_dos:
+                    orb_proj_dos_up = np.append(orb_proj_dos_up, np.sum(row[4:9:1]))
+            if orbital=="f":
+                for row in orbital_dos:
+                    orb_proj_dos_up = np.append(orb_proj_dos_up, np.sum(row[9:16:1]))
+        return orb_proj_dos_up, orb_proj_dos_down
+    
+    def get_atom_projected_dos(self, atom_index=None, dos_wrt_orb=None):
+        if (dos_wrt_orb is None) and (atom_index is not None):
+            atom_dos = self.partial_dos[atom_index]
+        elif (dos_wrt_orb is not None) and (atom_index is None):
+            atom_dos = dos_wrt_orb
+        atom_proj_dos_up = np.array([])
+        atom_proj_dos_down = np.array([])
+        if self.is_spin_polarized:
+            for row in atom_dos:
+                atom_proj_dos_up = np.append(atom_proj_dos_up, np.sum(row[::2]))
+                atom_proj_dos_down = np.append(atom_proj_dos_down, np.sum(row[1::2]))
+        elif not self.is_spin_polarized:
+            for row in atom_dos:
+                atom_proj_dos_up = np.append(atom_proj_dos_up, np.sum(row))
+        return atom_proj_dos_up, atom_proj_dos_down
+    
+    def get_atom_orbital_projected_dos(self, atom_index, orbital):
+        dos_wrt_orb = self.partial_dos[atom_index]
+        atom_orb_proj_dos_up, atom_orb_proj_dos_down = self.get_orbital_projected_dos(orbital, dos_wrt_orb=dos_wrt_orb)
+        return atom_orb_proj_dos_up, atom_orb_proj_dos_down
+    
+    def get_element_projected_dos(self, element):
+        atoms = read("CONTCAR")
+        indices = [atom.index for atom in atoms if atom.symbol==element]
+        element_dos = sum(self.partial_dos[i] for i in indices)
+        elem_proj_dos_up, elem_proj_dos_down = self.get_atom_projected_dos(dos_wrt_orb=element_dos)
+        return elem_proj_dos_up, elem_proj_dos_down
+    
+    def get_element_orbital_projected_dos(self, element, orbital):
+        atoms = read("CONTCAR")
+        indices = [atom.index for atom in atoms if atom.symbol==element]
+        dos_wrt_orb = sum(self.partial_dos[i] for i in indices)
+        elem_orb_proj_dos_up, elem_orb_proj_dos_down = self.get_orbital_projected_dos(orbital, dos_wrt_orb=dos_wrt_orb)
+        return elem_orb_proj_dos_up, elem_orb_proj_dos_down
+    
+    def get_select_atoms_projected_dos(self, indices):
+        atoms_dos = sum(self.partial_dos[i] for i in indices)
+        atoms_proj_dos_up, atoms_proj_dos_down = self.get_atom_projected_dos(dos_wrt_orb=atoms_dos)
+        return atoms_proj_dos_up, atoms_proj_dos_down
+    
+    def get_select_atoms_orbital_projected_dos(self, indices, orbital):
+        dos_wrt_orb = sum(self.partial_dos[i] for i in indices)
+        atoms_orb_proj_dos_up, atoms_orb_proj_dos_down = self.get_orbital_projected_dos(orbital, dos_wrt_orb=dos_wrt_orb)
+        return atoms_orb_proj_dos_up, atoms_orb_proj_dos_down
+    
+    def plot(self, dos, energy_range=None, label=None):
+        if energy_range is not None:
+            energies, dos = self.get_dos_in_energy_range(dos, energy_range)
+        elif energy_range is None:
+            energies = self.energies_wrt_fermi
+        fig = plt.figure(dpi = 200, figsize=(6.5,4.5))
+        plt.plot(energies, dos, color="darkcyan", label=label)
+        get_plot_settings(fig, x_label="$E$ - $E_F$", y_label="Density of States", fig_name=f"DOS.png")
+        plt.close(fig)
+    
+    def get_band_center(self, dos):
+        try:
+            band_center = np.average(self.energies_wrt_fermi, weights=dos)
+        except ZeroDivisionError:
+            band_center = 0
+        return band_center
+    
+    def get_dos_in_energy_range(self, dos, energy_range):
+        mask = (self.energies_wrt_fermi>=energy_range[0]) & (self.energies_wrt_fermi<=energy_range[1])
+        return self.energies_wrt_fermi[mask], dos[mask]
 
 def analyse_GCBH(save_data=True, energy_operation=None, label=None):
     """Performs a visual analysis of the results from Grand Canonical Basin Hopping simulation performed using catalapp.
@@ -1352,27 +1520,3 @@ def get_plot_settings(fig, x_label=None, y_label=None, fig_name=None, legend_loc
         plt.savefig(fig_name, bbox_inches='tight')
     if show == True:
         plt.show()
-
-"""LAMMPS related codes"""
-
-def fixed_layer_coord(atoms, n):    # For LAMMPS.
-    cell = atoms.get_cell()
-    layer_size = (atoms.get_cell()[0][0])/(2*n)
-    xlo1 = layer_size*int(n/2)
-    xhi1 = layer_size*(int(n/2)+1)
-    xlo2 = layer_size*(n+int(n/2))
-    xhi2 = layer_size*(n+int(n/2)+1)
-    return [xlo1, xhi1, xlo2, xhi2]
-
-def edit_lammps_script(file_path, x, Tdamp, dt, N):
-    with open(file_path, 'r') as f:
-        content = f.read()
-    content = content.replace("xlo1", str(x[0]))
-    content = content.replace("xhi1", str(x[1]))
-    content = content.replace("xlo2", str(x[2]))
-    content = content.replace("xhi2", str(x[3]))
-    content = content.replace("Tdamp", str(Tdamp))
-    content = content.replace("deltat", str(dt))
-    content = content.replace("NNN", str(N))
-    with open(file_path, 'w') as f:
-        f.write(content)
