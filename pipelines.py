@@ -303,7 +303,6 @@ def get_valence_electrons(atoms=None, addnl_settings=None):
     f = open("POTCAR", "r")
     lines = f.readlines()
     search_str = lines[0].split()[0]
-    print(search_str)
     for i,line in enumerate(lines):
         if search_str in line and not any(excluded in line for excluded in ["TITEL", "LPAW", "radial sets"]):
             match = re.search(fr"{search_str}\s+([A-Z][a-z]?)", line)
@@ -559,8 +558,7 @@ class COHP:
             ax1.set_ylim(cohp_ylim)
             ax1.set_xlim(cohp_xlim)
             ax1.set_xlabel("-COHP (eV)", color="k", fontsize="large")
-            plt.rcParams["text.usetex"] = True
-            ax1.set_ylabel("$E-E_\mathrm{F}$ (eV)", fontsize="large")
+            ax1.set_ylabel("$E-E_F$ (eV)", fontsize="large")
             ax1.tick_params(axis="x", colors="k")
             # ICOHP
             ax2 = ax1.twiny()
@@ -1192,9 +1190,10 @@ class DOS:
             else:
                 return 0.0
         if self.is_spin_polarized:
-            return min(gap_calc(self.total_dos_up),gap_calc(self.total_dos_down))
+            total_dos_up_and_down = self.total_dos_up + self.total_dos_down
         elif not self.is_spin_polarized:
-            return gap_calc(self.total_dos_up)
+            total_dos_up_and_down = self.total_dos_up
+        return gap_calc(total_dos_up_and_down)
     
     def get_total_dos(self):
         return self.total_dos_up, self.total_dos_down
@@ -1283,19 +1282,28 @@ class DOS:
         atoms_orb_proj_dos_up, atoms_orb_proj_dos_down = self.get_orbital_projected_dos(orbital, dos_wrt_orb=dos_wrt_orb)
         return atoms_orb_proj_dos_up, atoms_orb_proj_dos_down
     
-    def plot(self, dos, energy_range=None, label=None):
+    def plot(self, dos, energy_range=None, label=None, fig_name="DOS.png"):
         if energy_range is not None:
             energies, dos = self.get_dos_in_energy_range(dos, energy_range)
         elif energy_range is None:
             energies = self.energies_wrt_fermi
         fig = plt.figure(dpi = 200, figsize=(6.5,4.5))
         plt.plot(energies, dos, color="darkcyan", label=label)
-        get_plot_settings(fig, x_label="$E$ - $E_F$", y_label="Density of States", fig_name=f"DOS.png")
+        get_plot_settings(fig, x_label="$E$ - $E_F$", y_label="Density of States", fig_name=fig_name)
         plt.close(fig)
     
-    def get_band_center(self, dos):
+    def get_band_center(self, dos_up, dos_down=None, energy_range=None):
         try:
-            band_center = np.average(self.energies_wrt_fermi, weights=dos)
+            if energy_range is not None:
+                energies, dos_up = self.get_dos_in_energy_range(dos_up, energy_range)
+                _, dos_down = self.get_dos_in_energy_range(dos_down, energy_range)
+            elif energy_range is None:
+                energies = self.energies_wrt_fermi
+            if dos_down is not None:
+                dos_up_and_down = dos_up+dos_down
+            else:
+                dos_up_and_down = dos_up
+            band_center = np.average(energies, weights=dos_up_and_down)
         except ZeroDivisionError:
             band_center = 0
         return band_center
