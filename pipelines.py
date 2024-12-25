@@ -91,16 +91,16 @@ def cell_opt(atoms, kpts, npoints=5, eps=0.04, addnl_settings=None):
     """
     calc = get_base_calc()
 
-    calc.set(ibrion=-1, nsw=0, kpts=kpts)
     if addnl_settings!=None:
         keys = addnl_settings.keys()
         for key in keys:
             set_vasp_key(calc, key, addnl_settings[key])
+    calc.set(ibrion=-1, nsw=0, kpts=kpts)
     atoms.calc = calc
 
     eos = calculate_eos(atoms, npoints=npoints, eps=eps, trajectory="eos.traj")
 
-    v, e, B = eos.fit()
+    v,_,_ = eos.fit()
     eos.plot(filename="eos.png")
     opt_factor = v / atoms.get_volume()
     atoms.cell = atoms.cell * opt_factor
@@ -136,17 +136,17 @@ def axis_opt(atoms, kpts, axis, npoints=5, eps=0.04, addnl_settings=None):
         atoms_tmp = atoms.copy()
         atoms_tmp.cell[axis] = atoms.cell[axis] * factor
         calc = get_base_calc()
-        calc.set(ibrion=-1, nsw=0, kpts=kpts, directory=f"{factor:.2f}")
         if addnl_settings!=None:
             keys = addnl_settings.keys()
             for key in keys:
                 set_vasp_key(calc, key, addnl_settings[key])
+        calc.set(ibrion=-1, nsw=0, kpts=kpts, directory=f"{factor:.2f}")
         atoms_tmp.calc = calc
         ens[ifactor] = atoms_tmp.get_potential_energy()
         vols[ifactor] = atoms_tmp.get_volume()
 
     eos = EOS(volumes=vols, energies=ens, eos="sj")
-    v0, e0, B = eos.fit()
+    v0,_,_ = eos.fit()
     opt_factor = v0 / atoms.get_volume()
     atoms.cell[axis] = atoms.cell[axis] * opt_factor
     write("opted_axis.vasp", atoms)
@@ -180,14 +180,12 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
     def opt_by_vasp(opt_levels, level):
         calc = get_base_calc()
         level_settings = opt_levels[level]
-        # default settings when using built-in optimizer
+        for key in level_settings.keys():
+            set_vasp_key(calc, key, level_settings[key])
         set_vasp_key(calc, 'ibrion', 2)
         set_vasp_key(calc, 'ediffg', -1e-2)
         set_vasp_key(calc, 'nsw', 500)
         set_vasp_key(calc, 'nelm', 500)
-        # user-supplied overrides
-        for key in level_settings.keys():
-            set_vasp_key(calc, key, level_settings[key])
 
         atoms = read("CONTCAR")
         atoms.calc = calc
@@ -198,15 +196,13 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
     
     def opt_by_ase(atoms, opt_levels, level):
         calc = get_base_calc()
-        # default settings when using ase optimizer
-        set_vasp_key(calc, 'ibrion', -1)
-        set_vasp_key(calc, 'nsw', 0)
-        # user-supplied overrides
         level_settings = opt_levels[level]
         for key in level_settings.keys():
             if key in ['nsw', 'ibrion', 'ediffg']:
                 continue
             set_vasp_key(calc, key, level_settings[key])
+        set_vasp_key(calc, 'ibrion', -1)
+        set_vasp_key(calc, 'nsw', 0)
 
         atoms.calc = calc
         opt = BFGS(atoms,
@@ -260,6 +256,15 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
     return atoms
 
 def get_valence_electrons(atoms=None, addnl_settings=None):
+    """Provides number of valence electrons of each element in a calculation. If POTCAR already exists in the calculation folder, atoms and addnl_settings parameters are not required. If not, based on the elements in the atoms object and calculation settings, the number of valence electrons are calculated. Example: If setups is provided as {"Li": "_sv"} in addnl_settings, the number of valence electrons for Li are 3 (instead of 1 when setups is not provided).
+
+    :param atoms: Atoms for which valence electrons of each element are to be obtained, defaults to None
+    :type atoms: Atoms object, optional
+    :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
+    :type addnl_settings: dict, optional
+    :return: Valence electrons of each element in the calculation
+    :rtype: dict
+    """
     valence_electrons = {}
     potcar_folder = os.getenv("VASP_PP_PATH")
     def get_potcar_subfolder(settings):
@@ -320,8 +325,8 @@ def bader(atoms, kpts, valence_electrons=None, addnl_settings=None, restart=None
     :type atoms: Atoms object
     :param kpts: KPOINTS used for the calculation
     :type kpts: list
-    :param valence_electrons: Dictionary containing the symbol of atoms as key and the corresponding valence electrons from POTCAR as value, example: {"Si":4, "H":1}
-    :type valence_electrons: dict
+    :param valence_electrons: Dictionary containing the symbol of atoms as key and the corresponding valence electrons from POTCAR as value, example: {"Si":4, "H":1}, defaults to None
+    :type valence_electrons: dict, optional
     :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
     :type addnl_settings: dict, optional
     """
@@ -353,7 +358,7 @@ def bader(atoms, kpts, valence_electrons=None, addnl_settings=None, restart=None
         )
         assert os.path.exists("ACF.dat"), "bader: ACF.dat not found"
 
-    def read_bader(atoms):
+    def read_bader(atoms, valence_electrons=valence_electrons):
         if valence_electrons is None:
             valence_electrons = get_valence_electrons()
         else:
@@ -427,8 +432,8 @@ class COHP:
 
         :param kpts: KPOINTS used for the calculation
         :type kpts: list
-        :param valence_electrons: Dictionary containing the symbol of atoms as key and the corresponding valence electrons from POTCAR as value, example: {"Si":4, "H":1}
-        :type valence_electrons: dict
+        :param valence_electrons: Dictionary containing the symbol of atoms as key and the corresponding valence electrons from POTCAR as value, example: {"Si":4, "H":1}, defaults to None
+        :type valence_electrons: dict, optional
         :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
         :type addnl_settings: dict, optional
         """
@@ -1036,7 +1041,7 @@ class gibbs_free_energy:
             os.chdir(pwd)
 
     def get_vib_energy(self, temperature, pressure=None):
-        """Obtain the vibrational energy of the system using the frequency calculation.
+        """Gives the vibrational energy of the system using the frequency calculation.
 
         :param temperature: Temperature at which the vibrational energy is to be calculated
         :type temperature: float
@@ -1091,9 +1096,11 @@ class gibbs_free_energy:
         :return: Gibbs free energy of the system
         :rtype: float
         """
-        return self.get_energy(potential=potential, outcar_location=outcar_location)+ self.get_vib_energy(temperature, pressure=pressure)
+        return self.get_energy(potential=potential, outcar_location=outcar_location)+self.get_vib_energy(temperature, pressure=pressure)
 
 class DOS:
+    """Performs a DOS calculation and parses the DOSCAR.
+    """
     def __init__(self):
         self.is_spin_polarized = None
         self.fermi_energy = None
@@ -1105,11 +1112,13 @@ class DOS:
 
     def run(self, atoms, kpts, valence_electrons=None, addnl_settings=None):
         """
-
+        Runs single point calculation to obtain CHGCAR and WAVECAR and subsequent DOS calculation with an energy range of -20 to 15 eV.
         :param atoms: Atoms used for DOS calculation
         :type atoms: Atoms object
         :param kpts: KPOINTS used for the calculation
         :type kpts: list
+        :param valence_electrons: Dictionary containing the symbol of atoms as key and the corresponding valence electrons from POTCAR as value, example: {"Si":4, "H":1}, defaults to None
+        :type valence_electrons: dict, optional
         :param addnl_settings: Dictionary containing any additional VASP settings (either editing default settings of base_calc or adding more settings), defaults to None
         :type addnl_settings: dict, optional
         """
@@ -1139,6 +1148,8 @@ class DOS:
         atoms.get_potential_energy()
     
     def parse_doscar(self):
+        """Parses the DOSCAR obtained from the DOS calculation.
+        """
         assert os.path.exists("DOSCAR"), "DOSCAR is missing. DOS calculation is incomplete. Please check your calculation!"
         with open("DOSCAR", 'r') as f:
             lines = f.readlines()
@@ -1172,6 +1183,11 @@ class DOS:
             self.partial_dos = np.array(self.partial_dos)
     
     def get_band_gap(self):
+        """Provides the band gap of the system from the parsed information.
+
+        :return: Band gap of the system
+        :rtype: float
+        """
         energies_below_fermi = self.energies[self.energies<self.fermi_energy]
         energies_above_fermi = self.energies[self.energies>self.fermi_energy]
         def gap_calc(dos_array):
@@ -1196,9 +1212,23 @@ class DOS:
         return gap_calc(total_dos_up_and_down)
     
     def get_total_dos(self):
+        """Gives the total DOS of the system. For spin polarized calculations, it provides the total DOS of spin up and down channels. For non spin polarized calculations, the total DOS is provided in the spin up channel and the spin down channel is empty.
+
+        :return: Total DOS of spin up and down channels
+        :rtype: numpy array
+        """
         return self.total_dos_up, self.total_dos_down
     
     def get_orbital_projected_dos(self, orbital, dos_wrt_orb=None):
+        """
+        Gives the orbital projected DOS of the system. For spin polarized calculations, it provides the orbital projected DOS of spin up and down channels. For non spin polarized calculations, the orbital projected DOS is provided in the spin up channel and the spin down channel is empty.
+        :param orbital: Orbital on which the DOS is to be projected on, example: "s"
+        :type orbital: str
+        :param dos_wrt_orb: DOS with respect to different orbitals (s_up, s_down, px_up, px_down, py_up, py_down, ...), this is an internal parameter, defaults to None
+        :type dos_wrt_orb: numpy array, optional
+        :return: Orbital projected DOS of spin up and down channels
+        :rtype: numpy array
+        """
         if dos_wrt_orb is None:
             orbital_dos = sum(self.partial_dos)
         elif dos_wrt_orb is not None:
@@ -1238,6 +1268,15 @@ class DOS:
         return orb_proj_dos_up, orb_proj_dos_down
     
     def get_atom_projected_dos(self, atom_index=None, dos_wrt_orb=None):
+        """Gives the atom projected DOS of the system. For spin polarized calculations, it provides the atom projected DOS of spin up and down channels. For non spin polarized calculations, the atom projected DOS is provided in the spin up channel and the spin down channel is empty.
+
+        :param atom_index: Index of atom for which the DOS is to be provided, defaults to None
+        :type atom_index: int, optional
+        :param dos_wrt_orb: DOS with respect to different orbitals (s_up, s_down, px_up, px_down, py_up, py_down, ...), this is an internal parameter, defaults to None
+        :type dos_wrt_orb: numpy array, optional
+        :return: Atom projected DOS of spin up and down channels
+        :rtype: numpy array
+        """
         if (dos_wrt_orb is None) and (atom_index is not None):
             atom_dos = self.partial_dos[atom_index]
         elif (dos_wrt_orb is not None) and (atom_index is None):
@@ -1254,11 +1293,27 @@ class DOS:
         return atom_proj_dos_up, atom_proj_dos_down
     
     def get_atom_orbital_projected_dos(self, atom_index, orbital):
+        """Gives the atom orbital projected DOS of the system. For spin polarized calculations, it provides the atom orbital projected DOS of spin up and down channels. For non spin polarized calculations, the atom orbital projected DOS is provided in the spin up channel and the spin down channel is empty.
+
+        :param atom_index: Index of atom for which the DOS is to be provided
+        :type atom_index: int
+        :param orbital: Orbital on which the DOS is to be projected on, example: "s"
+        :type orbital: str
+        :return: Atom and orbital projected DOS of spin up and down channels
+        :rtype: numpy array
+        """
         dos_wrt_orb = self.partial_dos[atom_index]
         atom_orb_proj_dos_up, atom_orb_proj_dos_down = self.get_orbital_projected_dos(orbital, dos_wrt_orb=dos_wrt_orb)
         return atom_orb_proj_dos_up, atom_orb_proj_dos_down
     
     def get_element_projected_dos(self, element):
+        """Gives the element projected DOS of the system. For spin polarized calculations, it provides the element projected DOS of spin up and down channels. For non spin polarized calculations, the element projected DOS is provided in the spin up channel and the spin down channel is empty.
+
+        :param element: Element on which the DOS is to be projected on, example: "Li"
+        :type element: str
+        :return: Element projected DOS of spin up and down channels
+        :rtype: numpy array
+        """
         atoms = read("CONTCAR")
         indices = [atom.index for atom in atoms if atom.symbol==element]
         element_dos = sum(self.partial_dos[i] for i in indices)
@@ -1434,28 +1489,6 @@ def check_run_completion(location):
         return False
     else:
         return True
-
-def get_cell_info(atoms):
-    """Provides information about the volume, vector lengths and angles of the unit cell.
-
-    :param atoms: Atoms object for which the cell information is to be obtained
-    :type atoms: Atoms object
-    """
-    cell = atoms.get_cell()
-    
-    volume = cell.volume
-    lengths = cell.lengths()
-    angles = cell.angles()
-
-    print("Cell Vectors:")
-    print(cell[:])
-    print("Volume of the cell:", volume)
-    print("Length of vector a:", lengths[0])
-    print("Length of vector b:", lengths[1])
-    print("Length of vector c:", lengths[2])
-    print("Angle alpha:", angles[0])
-    print("Angle beta:", angles[1])
-    print("Angle gamma", angles[2])
 
 class benchmark:
     """Performs computational benchmark of a VASP job.

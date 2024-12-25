@@ -6,12 +6,13 @@ if __name__=="__main__":
     vib_indices = [iii]
     addnl_settings = {
         "setups": {'Li': '_sv'},
+        "nelm": 300,
         "encut": 400,
         "algo": "Normal",
         "prec": "Accurate",
         "amin": 0.01,
         "lsol": True,
-        "eb_k": 46.59,
+        "eb_k": 5.0,
         "lambda_d_k": 2.3,
         "nc_k": 0.001,
         "ncore": 4,
