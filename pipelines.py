@@ -179,13 +179,13 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
     
     def opt_by_vasp(opt_levels, level):
         calc = get_base_calc()
+        set_vasp_key(calc, 'nsw', 500)
+        set_vasp_key(calc, 'nelm', 500)
         level_settings = opt_levels[level]
         for key in level_settings.keys():
             set_vasp_key(calc, key, level_settings[key])
         set_vasp_key(calc, 'ibrion', 2)
         set_vasp_key(calc, 'ediffg', -1e-2)
-        set_vasp_key(calc, 'nsw', 500)
-        set_vasp_key(calc, 'nelm', 500)
 
         atoms = read("CONTCAR")
         atoms.calc = calc
@@ -312,7 +312,7 @@ def get_valence_electrons(atoms=None, addnl_settings=None):
         if search_str in line and not any(excluded in line for excluded in ["TITEL", "LPAW", "radial sets"]):
             match = re.search(fr"{search_str}\s+([A-Z][a-z]?)", line)
             next_line = lines[i+1]
-            nelect = float(next_line.split()[0])
+            nelect = int(next_line.split()[0])
         if match:
             element = match.group(1)
         valence_electrons[element] = nelect
