@@ -312,7 +312,7 @@ def get_valence_electrons(atoms=None, addnl_settings=None):
         if search_str in line and not any(excluded in line for excluded in ["TITEL", "LPAW", "radial sets"]):
             match = re.search(fr"{search_str}\s+([A-Z][a-z]?)", line)
             next_line = lines[i+1]
-            nelect = int(next_line.split()[0])
+            nelect = int(float(next_line.split()[0]))
         if match:
             element = match.group(1)
         valence_electrons[element] = nelect
