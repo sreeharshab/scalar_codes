@@ -43,7 +43,7 @@ You can change the defaults and add additional settings using `opt_levels` param
 </div>
 
 2. axis_opt: Optimizes the size of the required axis of the simulation cell and provides and equation of state plot.
-3. geo_opt: Performs geometry optimization on the system using inbuilt [VASP](https://www.vasp.at/wiki/index.php/The_VASP_Manual) optimizer (IBRION=2) or [ASE](https://wiki.fysik.dtu.dk/ase/)'s BFGS optimizer.
+3. geo_opt: Performs geometry optimization on the system using inbuilt [VASP](https://www.vasp.at/wiki/index.php/The_VASP_Manual) optimizer (default is IBRION=2) or [ASE](https://wiki.fysik.dtu.dk/ase/)'s BFGS optimizer.
 4. bader: Performs [bader charge analysis](https://theory.cm.utexas.edu/henkelman/code/bader/) on the system. Charges can be viewed in ACF.dat file or using ase gui and choosing the Initial Charges in the view tab as shown below.  
 <div align="center">
     <img src="examples/bader/bader.png" alt="Description" width="500" height=auto>

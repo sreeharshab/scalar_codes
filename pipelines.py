@@ -181,11 +181,11 @@ def geo_opt(atoms, mode="vasp", opt_levels=None, restart=None, fmax=0.02):
         calc = get_base_calc()
         set_vasp_key(calc, 'nsw', 500)
         set_vasp_key(calc, 'nelm', 500)
+        set_vasp_key(calc, 'ediffg', -1e-2)
+        set_vasp_key(calc, 'ibrion', 2)
         level_settings = opt_levels[level]
         for key in level_settings.keys():
             set_vasp_key(calc, key, level_settings[key])
-        set_vasp_key(calc, 'ibrion', 2)
-        set_vasp_key(calc, 'ediffg', -1e-2)
 
         atoms = read("CONTCAR")
         atoms.calc = calc
